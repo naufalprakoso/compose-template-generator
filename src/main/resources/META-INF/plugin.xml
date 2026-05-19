@@ -1,0 +1,88 @@
+<idea-plugin>
+    <id>com.kmpfeaturekit</id>
+    <name>Compose Template Generator</name>
+    <vendor email="naufalprakoso24@gmail.com">Naufal Prakoso</vendor>
+
+    <description><![CDATA[
+        Compose Template Generator accelerates Kotlin Multiplatform and Compose Multiplatform development with
+        architecture-aware generation, source-set guardrails, inspections, quick fixes, project scans,
+        settings, and safe dry-run previews.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.java</depends>
+    <depends>org.jetbrains.kotlin</depends>
+
+    <resource-bundle>messages.KmpFeatureKitBundle</resource-bundle>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <projectService serviceImplementation="com.kmpfeaturekit.generator.FeatureGenerationService"/>
+        <projectService serviceImplementation="com.kmpfeaturekit.generator.FileWriteService"/>
+        <projectService serviceImplementation="com.kmpfeaturekit.templates.TemplateRenderService"/>
+        <projectService serviceImplementation="com.kmpfeaturekit.sourceSet.SourceSetDetectionService"/>
+        <projectService serviceImplementation="com.kmpfeaturekit.services.ProjectScanService"/>
+        <projectService serviceImplementation="com.kmpfeaturekit.di.KoinRegistrationService"/>
+        <projectService serviceImplementation="com.kmpfeaturekit.navigation.NavigationRegistrationService"/>
+        <projectService serviceImplementation="com.kmpfeaturekit.settings.KmpFeatureKitSettings"/>
+
+        <projectConfigurable
+            displayName="Compose Template Generator"
+            parentId="tools"
+            instance="com.kmpfeaturekit.settings.KmpFeatureKitConfigurable"/>
+
+        <toolWindow
+            id="Compose Template Generator"
+            anchor="right"
+            factoryClass="com.kmpfeaturekit.toolwindow.KmpFeatureKitToolWindowFactory"/>
+
+        <notificationGroup id="Compose Template Generator" displayType="BALLOON"/>
+
+        <localInspection
+            language="kotlin"
+            shortName="KmpAndroidOnlyCommonMain"
+            displayName="Android-only API inside commonMain"
+            groupName="Compose Template Generator"
+            enabledByDefault="true"
+            level="WARNING"
+            implementationClass="com.kmpfeaturekit.inspections.AndroidOnlyCommonMainInspection"/>
+
+        <localInspection
+            language="kotlin"
+            shortName="KmpMissingActual"
+            displayName="Missing actual implementation"
+            groupName="Compose Template Generator"
+            enabledByDefault="true"
+            level="WARNING"
+            implementationClass="com.kmpfeaturekit.inspections.MissingActualInspection"/>
+
+        <localInspection
+            language="kotlin"
+            shortName="KmpFeatureGuardrails"
+            displayName="KMP feature guardrails"
+            groupName="Compose Template Generator"
+            enabledByDefault="true"
+            level="WEAK WARNING"
+            implementationClass="com.kmpfeaturekit.inspections.KmpGuardrailInspection"/>
+    </extensions>
+
+    <extensions defaultExtensionNs="org.jetbrains.kotlin">
+        <supportsKotlinPluginMode supportsK2="true"/>
+    </extensions>
+
+    <actions>
+        <group id="KmpFeatureKit.Tools" text="Compose Template Generator" popup="true">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <action id="KmpFeatureKit.NewFeatureTools"
+                    class="com.kmpfeaturekit.actions.NewKmpFeatureAction"
+                    text="New Compose Feature"
+                    description="Generate a KMP/CMP feature with architecture-aware templates"/>
+        </group>
+
+        <action id="KmpFeatureKit.NewFeature"
+                class="com.kmpfeaturekit.actions.NewKmpFeatureAction"
+                text="Compose Feature"
+                description="Generate a KMP/CMP feature">
+            <add-to-group group-id="NewGroup" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>
