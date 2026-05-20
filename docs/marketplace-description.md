@@ -11,3 +11,5 @@ When project files match common patterns, the plugin can register generated Koin
 The plugin also includes inspections and quick fixes for common Kotlin Multiplatform issues, including Android-only APIs in `commonMain` and missing `actual` implementations.
 
 Privacy: Compose Template Generator runs locally and does not collect telemetry or send project data outside the IDE.
+
+Supported integrations are documented in the project support matrix. Unsupported project shapes receive reviewable TODO patches instead of silent edits.

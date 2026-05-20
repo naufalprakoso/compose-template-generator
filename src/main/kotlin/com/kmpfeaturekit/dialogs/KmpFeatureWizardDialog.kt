@@ -54,11 +54,14 @@ class KmpFeatureWizardDialog(
     private val networking = ComboBox(NetworkingType.entries.toTypedArray())
     private val persistence = ComboBox(PersistenceType.entries.toTypedArray())
     private val projectStyle = ComboBox(ProjectStyle.entries.toTypedArray())
+    private val autoRegisterDi = JCheckBox("Wire dependency injection when a safe target is found", true)
+    private val autoRegisterNavigation = JCheckBox("Wire navigation when a safe target is found", true)
     private val platforms = CheckBoxList<PlatformTarget>()
     private val previewList = JPanel()
     private val previewSelections = linkedMapOf<String, Pair<PlannedFile, JCheckBox>>()
     private val detectedSummary = JBTextArea(5, 48)
     private val previewWarnings = JBTextArea(4, 48)
+    private val previewContent = JBTextArea(12, 72)
     private val scanResult: ProjectScanResult = project.service<ProjectScanService>().scan()
 
     init {
@@ -78,6 +81,7 @@ class KmpFeatureWizardDialog(
         detectedSummary.isEditable = false
         detectedSummary.text = buildDetectedSummary()
         previewWarnings.isEditable = false
+        previewContent.isEditable = false
         previewList.layout = BoxLayout(previewList, BoxLayout.Y_AXIS)
         listOf(featureName, basePackage, targetModule, sourceSetRoot).forEach { field ->
             field.document.addDocumentListener(object : DocumentListener {
@@ -88,6 +92,9 @@ class KmpFeatureWizardDialog(
         }
         listOf(di, networking, persistence, projectStyle).forEach { comboBox ->
             comboBox.addActionListener { refreshPreview() }
+        }
+        listOf(autoRegisterDi, autoRegisterNavigation).forEach { checkbox ->
+            checkbox.addActionListener { refreshPreview() }
         }
         init()
         refreshPreview()
@@ -111,7 +118,10 @@ class KmpFeatureWizardDialog(
                 platforms = PlatformTarget.entries.filter { platforms.isItemSelected(it) }.toSet(),
                 projectStyle = projectStyle.selectedItem as ProjectStyle
             ),
-            options = FeatureOptions()
+            options = FeatureOptions(
+                autoRegisterDi = autoRegisterDi.isSelected,
+                autoRegisterNavigation = autoRegisterNavigation.isSelected
+            )
         )
 
     fun selectedFiles(): List<PlannedFile> =
@@ -145,11 +155,14 @@ class KmpFeatureWizardDialog(
             .addLabeledComponent("Dependency injection", di)
             .addLabeledComponent("Networking", networking)
             .addLabeledComponent("Persistence", persistence)
+            .addComponent(autoRegisterDi)
+            .addComponent(autoRegisterNavigation)
             .addLabeledComponent("Platforms", platforms)
             .addLabeledComponent("Project style", projectStyle)
             .addSeparator()
             .addComponent(JBLabel("Project changes preview"))
             .addComponent(JBScrollPane(previewList).apply { preferredSize = Dimension(860, 220) })
+            .addLabeledComponent("Selected change", JBScrollPane(previewContent).apply { preferredSize = Dimension(860, 220) })
             .addLabeledComponent("Warnings", JBScrollPane(previewWarnings).apply { preferredSize = Dimension(860, 96) })
             .panel
 
@@ -202,9 +215,15 @@ class KmpFeatureWizardDialog(
             (preview.filesToCreate + preview.filesToModify).forEach { plannedFile ->
                 val checkbox = JCheckBox(previewLabel(plannedFile), plannedFile.path !in excludedPaths)
                 checkbox.toolTipText = plannedFile.path
+                checkbox.addActionListener {
+                    previewContent.text = renderSelectedChange(plannedFile)
+                    previewContent.caretPosition = 0
+                }
                 previewSelections[plannedFile.path] = plannedFile to checkbox
                 previewList.add(checkbox)
             }
+            previewContent.text = previewSelections.values.firstOrNull()?.first?.let(::renderSelectedChange).orEmpty()
+            previewContent.caretPosition = 0
             previewWarnings.text = if (preview.warnings.isEmpty()) {
                 "No warnings. Existing files are still skipped unless selected project changes are safe replacements."
             } else {
@@ -212,6 +231,7 @@ class KmpFeatureWizardDialog(
             }
         } else {
             previewList.add(JBLabel("Enter a valid feature name and base package to preview generated files."))
+            previewContent.text = ""
             previewWarnings.text = ""
         }
         previewList.revalidate()
@@ -225,4 +245,11 @@ class KmpFeatureWizardDialog(
         }
         return "$marker: ${plannedFile.path}"
     }
+
+    private fun renderSelectedChange(plannedFile: PlannedFile): String =
+        buildString {
+            appendLine(previewLabel(plannedFile))
+            appendLine()
+            appendLine(plannedFile.content)
+        }
 }

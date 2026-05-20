@@ -15,6 +15,7 @@ The plugin is meant for projects that already have a preferred app structure but
 - Can register generated Koin modules, Kotlin Inject modules, Hilt modules, and supported navigation entries when the existing project file has a recognizable shape.
 - Supports Navigation Compose plus registry-list wiring for Voyager, Circuit, Decompose, and Appyx.
 - Can add dependency lines to `commonMain.dependencies` and patch existing `gradle/libs.versions.toml` catalogs when generated dependencies need aliases.
+- Runs generated sample sources through a temporary Gradle KMP project in the test suite.
 
 The generated Gradle, DI, and navigation patches are intentionally conservative. When the plugin cannot safely edit an integration point, it creates a TODO-style patch instead of changing project wiring silently.
 
@@ -26,6 +27,8 @@ The generated Gradle, DI, and navigation patches are intentionally conservative.
 - Navigation Compose: inserts generated routes into recognized `NavHost` blocks.
 - Voyager, Circuit, Decompose, and Appyx: appends generated navigation graph entries to recognized registry lists.
 - Gradle Kotlin DSL: adds dependency aliases to `commonMain.dependencies`; if the version catalog exists and the alias is missing, the catalog patch is previewed as a second file update.
+
+See [docs/support-matrix.md](docs/support-matrix.md) for the exact supported project shapes and fallbacks.
 
 ## Project layout
 
@@ -54,6 +57,12 @@ Run tests:
 
 ```bash
 ./gradlew test
+```
+
+The repository also includes a generated Kotlin Multiplatform sample fixture:
+
+```bash
+./gradlew -p samples/kmp-build-fixture compileKotlinJvm
 ```
 
 Build a Marketplace ZIP:

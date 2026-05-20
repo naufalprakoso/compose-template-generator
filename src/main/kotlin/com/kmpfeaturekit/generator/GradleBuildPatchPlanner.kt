@@ -48,7 +48,6 @@ object GradleBuildPatchPlanner {
         val availableAliases = aliases + (catalogPatch?.let { dependencies.map { it.alias } }.orEmpty())
         val dependencyLines = dependencies
             .filter { it.alias in availableAliases }
-            .map { "implementation(libs.${it.alias.replace("-", ".")})" }
             .distinct()
 
         if (dependencyLines.isEmpty()) {
@@ -60,7 +59,7 @@ object GradleBuildPatchPlanner {
         }
 
         val existing = buildFile.readText()
-        val updated = insertCommonMainDependencies(existing, dependencyLines)
+        val updated = insertDependencies(existing, dependencyLines)
             ?: return GradleBuildPatch(
                 content = fallbackPatch,
                 replacesFile = false,
@@ -72,10 +71,36 @@ object GradleBuildPatchPlanner {
     }
 
     fun insertCommonMainDependencies(content: String, dependencyLines: List<String>): String? {
+        return insertSourceSetDependencies(content, "commonMain", dependencyLines)
+    }
+
+    fun insertDependencies(content: String, dependencies: List<DependencyAlias>): String? {
+        var updated: String? = content
+        dependencies
+            .groupBy { it.sourceSet }
+            .forEach { (sourceSet, aliases) ->
+                updated = if (sourceSet == null) {
+                    insertTopLevelDependencies(
+                        updated ?: return null,
+                        aliases.map { it.gradleLine() }
+                    )
+                } else {
+                    insertSourceSetDependencies(
+                        updated ?: return null,
+                        sourceSet,
+                        aliases.map { it.gradleLine() }
+                    )
+                } ?: updated
+            }
+
+        return updated?.takeIf { it != content }
+    }
+
+    private fun insertSourceSetDependencies(content: String, sourceSetName: String, dependencyLines: List<String>): String? {
         val lines = content.lines().toMutableList()
-        val commonMainIndex = lines.indexOfFirst { "commonMain.dependencies" in it }
-        if (commonMainIndex >= 0) {
-            val insertIndex = findBlockClose(lines, commonMainIndex) ?: return null
+        val sourceSetDependenciesIndex = lines.indexOfFirst { "$sourceSetName.dependencies" in it }
+        if (sourceSetDependenciesIndex >= 0) {
+            val insertIndex = findBlockClose(lines, sourceSetDependenciesIndex) ?: return null
             val indent = lines[insertIndex].takeWhile { it.isWhitespace() } + "    "
             val missing = dependencyLines.filterNot { line -> line in content }
             if (missing.isEmpty()) return null
@@ -83,15 +108,36 @@ object GradleBuildPatchPlanner {
             return lines.joinToString("\n")
         }
 
-        val commonMainBlockIndex = lines.indexOfFirst { it.trim().startsWith("commonMain") && "{" in it }
-        if (commonMainBlockIndex < 0) return null
-        val commonMainClose = findBlockClose(lines, commonMainBlockIndex) ?: return null
-        val indent = lines[commonMainBlockIndex].takeWhile { it.isWhitespace() } + "    "
+        val sourceSetBlockIndex = lines.indexOfFirst { it.trim().startsWith(sourceSetName) && "{" in it }
+        if (sourceSetBlockIndex < 0) return null
+        val sourceSetClose = findBlockClose(lines, sourceSetBlockIndex) ?: return null
+        val indent = lines[sourceSetBlockIndex].takeWhile { it.isWhitespace() } + "    "
         val missing = dependencyLines.filterNot { line -> line in content }
         if (missing.isEmpty()) return null
         lines.addAll(
-            commonMainClose,
+            sourceSetClose,
             listOf("${indent}dependencies {") + missing.map { "$indent    $it" } + listOf("$indent}")
+        )
+        return lines.joinToString("\n")
+    }
+
+    private fun insertTopLevelDependencies(content: String, dependencyLines: List<String>): String? {
+        val lines = content.lines().toMutableList()
+        val dependenciesIndex = lines.indexOfFirst { it.trim() == "dependencies {" }
+        val missing = dependencyLines.filterNot { it in content }
+        if (missing.isEmpty()) return null
+
+        if (dependenciesIndex >= 0) {
+            val insertIndex = findBlockClose(lines, dependenciesIndex) ?: return null
+            val indent = lines[insertIndex].takeWhile { it.isWhitespace() } + "    "
+            lines.addAll(insertIndex, missing.map { "$indent$it" })
+            return lines.joinToString("\n")
+        }
+
+        val insertAt = lines.indexOfLast { it.trim() == "}" }.takeIf { it >= 0 }?.plus(1) ?: lines.size
+        lines.addAll(
+            insertAt,
+            listOf("", "dependencies {") + missing.map { "    $it" } + listOf("}")
         )
         return lines.joinToString("\n")
     }
@@ -99,8 +145,30 @@ object GradleBuildPatchPlanner {
     private fun dependencyAliases(request: FeatureRequest): List<DependencyAlias> = buildList {
         when (request.architecture.dependencyInjectionType) {
             DependencyInjectionType.KOIN -> add(DependencyAlias("koin-core", "io.insert-koin:koin-core", "4.1.0"))
-            DependencyInjectionType.KOTLIN_INJECT -> add(DependencyAlias("kotlin-inject-runtime", "me.tatarka.inject:kotlin-inject-runtime", "0.8.0"))
-            DependencyInjectionType.HILT_ANDROID_ONLY,
+            DependencyInjectionType.KOTLIN_INJECT -> {
+                add(DependencyAlias("kotlin-inject-runtime", "me.tatarka.inject:kotlin-inject-runtime", "0.8.0"))
+                add(
+                    DependencyAlias(
+                        alias = "kotlin-inject-compiler-ksp",
+                        module = "me.tatarka.inject:kotlin-inject-compiler-ksp",
+                        version = "0.8.0",
+                        configuration = "add(\"kspCommonMainMetadata\", %s)",
+                        sourceSet = null
+                    )
+                )
+            }
+            DependencyInjectionType.HILT_ANDROID_ONLY -> {
+                add(DependencyAlias("hilt-android", "com.google.dagger:hilt-android", "2.57.1", sourceSet = "androidMain"))
+                add(
+                    DependencyAlias(
+                        alias = "hilt-compiler",
+                        module = "com.google.dagger:hilt-compiler",
+                        version = "2.57.1",
+                        configuration = "add(\"kspAndroid\", %s)",
+                        sourceSet = null
+                    )
+                )
+            }
             DependencyInjectionType.MANUAL -> Unit
         }
         when (request.architecture.navigationType) {
@@ -177,5 +245,13 @@ object GradleBuildPatchPlanner {
         return null
     }
 
-    data class DependencyAlias(val alias: String, val module: String, val version: String)
+    data class DependencyAlias(
+        val alias: String,
+        val module: String,
+        val version: String,
+        val configuration: String = "implementation(%s)",
+        val sourceSet: String? = "commonMain"
+    ) {
+        fun gradleLine(): String = configuration.format("libs.${alias.replace("-", ".")}")
+    }
 }

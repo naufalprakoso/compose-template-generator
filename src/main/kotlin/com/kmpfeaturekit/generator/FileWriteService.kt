@@ -12,29 +12,35 @@ import java.nio.file.Path
 import kotlin.io.path.exists
 
 @Service(Service.Level.PROJECT)
-class FileWriteService(@Suppress("UNUSED_PARAMETER") private val project: Project) {
+class FileWriteService(private val project: Project) {
     fun write(files: List<PlannedFile>, overwrite: Boolean = false): GenerationResult {
         val written = mutableListOf<String>()
         val skipped = mutableListOf<String>()
         val warnings = mutableListOf<String>()
+        val kotlinNormalizer = KotlinPsiFileNormalizer(project)
 
         WriteAction.run<RuntimeException> {
             files.forEach { planned ->
                 val path = Path.of(planned.path)
+                val plannedContent = if (path.fileName.toString().endsWith(".kt")) {
+                    kotlinNormalizer.normalize(path.fileName.toString(), planned.content)
+                } else {
+                    planned.content
+                }
                 if (planned.kind == PlannedFileKind.MODIFY && path.exists()) {
                     val existing = Files.readString(path)
                     if (planned.replacesFile) {
-                        if (planned.content == existing) {
+                        if (plannedContent == existing) {
                             skipped += planned.path
                         } else {
-                            Files.writeString(path, planned.content)
+                            Files.writeString(path, plannedContent)
                             LocalFileSystem.getInstance().refreshAndFindFileByNioFile(path)
                             written += planned.path
                         }
-                    } else if (planned.content.trim() in existing) {
+                    } else if (plannedContent.trim() in existing) {
                         skipped += planned.path
                     } else {
-                        Files.writeString(path, existing.trimEnd() + "\n\n" + planned.content.trimEnd() + "\n")
+                        Files.writeString(path, existing.trimEnd() + "\n\n" + plannedContent.trimEnd() + "\n")
                         LocalFileSystem.getInstance().refreshAndFindFileByNioFile(path)
                         written += planned.path
                     }
@@ -43,7 +49,7 @@ class FileWriteService(@Suppress("UNUSED_PARAMETER") private val project: Projec
                     warnings += "Skipped existing file: ${planned.path}"
                 } else {
                     Files.createDirectories(path.parent)
-                    Files.writeString(path, planned.content)
+                    Files.writeString(path, plannedContent)
                     LocalFileSystem.getInstance().refreshAndFindFileByNioFile(path)
                     written += planned.path
                 }

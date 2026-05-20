@@ -9,8 +9,10 @@
 - Adds registry-list registration for Voyager, Circuit, Decompose, and Appyx projects that keep route entries in named lists.
 - Adds Gradle dependency insertion and version-catalog alias patch previews for known dependencies.
 - Adds generated-source compile smoke coverage for every architecture template.
+- Adds Gradle sample build coverage for generated KMP sources.
 - Adds clearer preview warnings for existing file updates and TODO fallback patches.
 - Adds a local-only privacy policy and removes the unused telemetry setting.
+- Adds a support matrix and CI workflow for plugin test/build checks.
 - Replaces the deprecated project root lookup used by project scanning.
 - Keeps TODO patch files as the fallback when an integration target cannot be updated safely.
 
