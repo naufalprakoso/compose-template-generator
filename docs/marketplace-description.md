@@ -1,7 +1,9 @@
 # Marketplace Description Draft
 
-Compose Template Generator is a workflow accelerator for Kotlin Multiplatform and Compose Multiplatform teams building Android and iOS applications.
+Compose Template Generator helps Kotlin Multiplatform teams create Compose feature scaffolds from inside IntelliJ IDEA or Android Studio.
 
-It generates full feature slices across multiple architecture ecosystems, detects project conventions, previews every file and integration change before writing, and adds guardrails for source-set safety, expect/actual coverage, DI, navigation, previews, tests, and architecture consistency.
+Use the New Compose Feature action to choose a feature name, package, target source sets, architecture style, navigation option, DI style, and optional data layers. The plugin previews every file before writing and avoids overwriting existing files by default.
 
-Supported ecosystems include MVVM, MVI, Slack Circuit, Decompose, Simple Feature, and Clean Architecture.
+It supports common KMP and Compose patterns including MVVM, MVI, Slack Circuit, Decompose, simple features, and Clean Architecture. It can also detect common libraries such as Koin, Kotlin Inject, Voyager, Decompose, Circuit, Ktor, Apollo, SQLDelight, and Room.
+
+The plugin also includes inspections and quick fixes for common Kotlin Multiplatform issues, including Android-only APIs in `commonMain` and missing `actual` implementations.

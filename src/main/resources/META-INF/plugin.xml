@@ -4,9 +4,8 @@
     <vendor email="naufalprakoso24@gmail.com">Naufal Prakoso</vendor>
 
     <description><![CDATA[
-        Compose Template Generator accelerates Kotlin Multiplatform and Compose Multiplatform development with
-        architecture-aware generation, source-set guardrails, inspections, quick fixes, project scans,
-        settings, and safe dry-run previews.
+        Compose Template Generator creates Kotlin Multiplatform / Compose feature files from Android Studio or IntelliJ IDEA.
+        It previews the generated files before writing them and includes inspections for common KMP source-set mistakes.
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
@@ -58,7 +57,7 @@
         <localInspection
             language="kotlin"
             shortName="KmpFeatureGuardrails"
-            displayName="KMP feature guardrails"
+            displayName="KMP feature source-set checks"
             groupName="Compose Template Generator"
             enabledByDefault="true"
             level="WEAK WARNING"
@@ -75,13 +74,13 @@
             <action id="KmpFeatureKit.NewFeatureTools"
                     class="com.kmpfeaturekit.actions.NewKmpFeatureAction"
                     text="New Compose Feature"
-                    description="Generate a KMP/CMP feature with architecture-aware templates"/>
+                    description="Generate a KMP/CMP feature template"/>
         </group>
 
         <action id="KmpFeatureKit.NewFeature"
                 class="com.kmpfeaturekit.actions.NewKmpFeatureAction"
                 text="Compose Feature"
-                description="Generate a KMP/CMP feature">
+                description="Generate a KMP/CMP feature template">
             <add-to-group group-id="NewGroup" anchor="last"/>
         </action>
     </actions>

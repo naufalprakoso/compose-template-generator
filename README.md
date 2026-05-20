@@ -1,30 +1,67 @@
 # Compose Template Generator
 
-Compose Template Generator is an IntelliJ IDEA / Android Studio plugin for Kotlin Multiplatform and Compose Multiplatform teams. It provides architecture-aware feature generation, source-set detection, KMP guardrails, inspections, quick fixes, settings, and a project health tool window.
+Compose Template Generator is an IntelliJ IDEA and Android Studio plugin for generating Kotlin Multiplatform / Compose feature scaffolds.
 
-## Highlights
+The plugin is meant for projects that already have a preferred app structure but still spend time creating the same screen, state, repository, navigation, DI, preview, and test files by hand.
 
-- New feature actions from `Tools > Compose Template Generator > New Compose Feature` and `New > Compose Feature`.
-- Multi-step wizard with feature info, architecture ecosystem, feature options, and dry-run preview.
-- Generation support for MVVM, MVI, Slack Circuit, Decompose, Simple Feature, and Clean Architecture.
-- Source-set-aware output for `commonMain`, `commonTest`, `androidMain`, and `iosMain`.
-- DI planning for Koin, Kotlin Inject, Hilt Android-only, and Manual DI.
-- Navigation planning for Navigation Compose, Voyager, Circuit Navigation, Decompose Navigation, and Appyx.
-- Inspections for Android-only common code, missing actuals, missing previews/tests/DI/navigation, source-set imports, and architecture smells.
-- Settings under `Settings > Tools > Compose Template Generator`.
+## What it does
 
-## Run
+- Adds `Tools > Compose Template Generator > New Compose Feature`.
+- Creates feature files for MVVM, MVI, Slack Circuit, Decompose, simple features, and Clean Architecture.
+- Writes source-set-aware files for `commonMain`, `commonTest`, `androidMain`, and `iosMain`.
+- Detects common project libraries such as Koin, Kotlin Inject, Voyager, Decompose, Circuit, Ktor, Apollo, SQLDelight, and Room.
+- Shows a dry-run preview before writing files and skips existing files by default.
+- Adds inspections and quick fixes for common KMP mistakes, including Android-only APIs in `commonMain` and missing `actual` implementations.
+
+The generated Gradle, DI, and navigation patches are intentionally conservative. When the plugin cannot safely edit an integration point, it creates a TODO-style patch instead of changing project wiring silently.
+
+## Project layout
+
+- `src/main/kotlin/com/kmpfeaturekit/actions` - IDE entry points.
+- `dialogs` - the feature wizard and default detection.
+- `generator` - preview and file write flow.
+- `templates` - generated Kotlin and documentation templates.
+- `sourceSet`, `di`, and `navigation` - project scanning and integration planning.
+- `inspections` and `quickfix` - KMP source-set checks and fixes.
+- `toolwindow` and `settings` - project health view and plugin settings.
+
+## Development
+
+Prerequisites:
+
+- JDK 21
+- Android Studio installed at `/Applications/Android Studio.app`
+
+Run the plugin in a sandbox IDE:
 
 ```bash
 ./gradlew runIde
 ```
 
-## Test
+Run tests:
 
 ```bash
 ./gradlew test
-./gradlew build
+```
+
+Build a Marketplace ZIP:
+
+```bash
+./gradlew buildPlugin
+```
+
+Verify compatibility:
+
+```bash
 ./gradlew verifyPlugin
 ```
 
-The project intentionally does not configure publishing.
+The ZIP is written to `build/distributions/`.
+
+## Release notes
+
+See [CHANGELOG.md](CHANGELOG.md).
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).

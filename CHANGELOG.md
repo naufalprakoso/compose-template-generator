@@ -2,6 +2,7 @@
 
 ## 0.1.0
 
-- Initial Compose Template Generator plugin scaffold.
-- Architecture-aware feature generator.
-- Project scanner, source-set detector, settings, tool window, inspections, quick fixes, tests, and docs.
+- Initial Marketplace build.
+- Adds the Compose feature wizard, dry-run preview, source-set detection, and file generation.
+- Adds KMP inspections and quick fixes for Android-only common code and missing `actual` implementations.
+- Adds settings, project health tool window, and Gradle publishing support.

@@ -45,12 +45,12 @@ intellijPlatform {
         }
 
         description = """
-            Compose Template Generator accelerates Kotlin Multiplatform and Compose Multiplatform feature development with
-            architecture-aware generation, source-set guardrails, inspections, quick fixes, project scans, and safe previews.
+            Compose Template Generator creates Kotlin Multiplatform / Compose feature files from Android Studio or IntelliJ IDEA.
+            It previews the generated files before writing them and includes inspections for common KMP source-set mistakes.
         """.trimIndent()
 
         changeNotes = """
-            Initial preview release with architecture-aware generation, project scanning, inspections, settings, and documentation.
+            Initial release with the New Compose Feature wizard, dry-run preview, source-set detection, inspections, settings, and Marketplace publishing support.
         """.trimIndent()
     }
 
