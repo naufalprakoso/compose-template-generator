@@ -53,6 +53,32 @@ class NavigationRegistrationPlannerTest {
     }
 
     @Test
+    fun registersRouteInMultilineNavHost() {
+        val content = """
+            package com.example
+
+            import androidx.navigation.compose.NavHost
+
+            fun AppGraph() {
+                NavHost(
+                    navController = navController,
+                    startDestination = "home",
+                ) {
+                    composable("home") {}
+                }
+            }
+        """.trimIndent()
+
+        val updated = NavigationRegistrationPlanner.registerRoute(
+            content,
+            "PaymentHistory",
+            "com.example.paymentHistory"
+        )
+
+        assertContains(updated.orEmpty(), "composable(PaymentHistoryRoute.path)")
+    }
+
+    @Test
     fun registersVoyagerEntryInRegistryList() {
         val content = """
             package com.example

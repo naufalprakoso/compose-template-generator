@@ -21,6 +21,16 @@ class FeatureGenerationService(private val project: Project) {
         }
         val warnings = buildList {
             files.filter { it.conflict }.forEach { add("Conflict: ${it.path}") }
+            files.filter { it.kind == PlannedFileKind.MODIFY && it.replacesFile }.forEach {
+                add("Will update existing file: ${it.path}")
+            }
+            files.filter { it.path.endsWith(".todo.kt") }.forEach {
+                val reason = it.content.lineSequence()
+                    .firstOrNull { line -> line.trim().startsWith("// Reason:") }
+                    ?.trim()
+                    ?.removePrefix("// ")
+                add("Manual review needed for ${it.path.substringAfterLast('/')}${reason?.let { detail -> ": $detail" }.orEmpty()}")
+            }
         }
         return DryRunPreview(
             filesToCreate = files.filter { it.kind != PlannedFileKind.MODIFY },

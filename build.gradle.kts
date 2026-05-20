@@ -47,11 +47,11 @@ intellijPlatform {
 
         description = """
             Compose Template Generator creates Kotlin Multiplatform / Compose feature files from Android Studio or IntelliJ IDEA.
-            It previews the generated files before writing them and includes inspections for common KMP source-set mistakes.
+            It previews generated and modified files before writing them, can wire supported DI/navigation patterns into recognized project files, and includes inspections for common KMP source-set mistakes.
         """.trimIndent()
 
         changeNotes = """
-            Adds safe DI and navigation wiring for Koin, Kotlin Inject, Hilt, Navigation Compose, Voyager, Circuit, Decompose, and Appyx, plus generated-source compile smoke tests.
+            Improves DI/navigation wiring, previews version-catalog alias updates, adds clearer project-change warnings, removes the unused telemetry setting, and keeps generated sample compile coverage on version 0.1.1.
         """.trimIndent()
     }
 

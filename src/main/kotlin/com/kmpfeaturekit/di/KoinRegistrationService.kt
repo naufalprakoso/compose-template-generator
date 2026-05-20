@@ -2,6 +2,7 @@ package com.kmpfeaturekit.di
 
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
+import com.kmpfeaturekit.utils.KotlinSourcePatcher
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.exists
@@ -65,31 +66,12 @@ object KoinRegistrationPlanner {
     }
 
     fun registerModule(content: String, featureModuleName: String, featureModuleImport: String): String? {
-        if (featureModuleName in content) return null
-
-        val listOfRegex = Regex("""modules\(\s*listOf\(([^)]*)\)\s*\)""", RegexOption.DOT_MATCHES_ALL)
-        val listMatch = listOfRegex.find(content)
-        if (listMatch != null) {
-            val existingModules = listMatch.groupValues[1].trim()
-            val replacement = if (existingModules.isBlank()) {
-                "modules(listOf($featureModuleName))"
-            } else {
-                "modules(listOf($existingModules, $featureModuleName))"
-            }
-            return addImport(content.replaceRange(listMatch.range, replacement), featureModuleImport)
-        }
-
-        val modulesRegex = Regex("""modules\(([^)]*)\)""", RegexOption.DOT_MATCHES_ALL)
-        val modulesMatch = modulesRegex.find(content) ?: return null
-        val existingModules = modulesMatch.groupValues[1].trim()
-        if ('\n' in existingModules || "{" in existingModules) return null
-
-        val replacement = if (existingModules.isBlank()) {
-            "modules($featureModuleName)"
-        } else {
-            "modules($existingModules, $featureModuleName)"
-        }
-        return addImport(content.replaceRange(modulesMatch.range, replacement), featureModuleImport)
+        return KotlinSourcePatcher.appendArgumentToCall(
+            content = content,
+            callName = "modules",
+            argument = featureModuleName,
+            importFqName = featureModuleImport
+        )
     }
 
     private fun todoPlan(featureModuleName: String, reason: String): RegistrationPlan =
@@ -104,34 +86,13 @@ object KoinRegistrationPlanner {
             warnings = listOf(reason)
         )
 
-    private fun addImport(content: String, importFqName: String): String {
-        val importLine = "import $importFqName"
-        if (importLine in content) return content
-
-        val lines = content.lines().toMutableList()
-        val lastImportIndex = lines.indexOfLast { it.startsWith("import ") }
-        return if (lastImportIndex >= 0) {
-            lines.add(lastImportIndex + 1, importLine)
-            lines.joinToString("\n")
-        } else {
-            val packageIndex = lines.indexOfFirst { it.startsWith("package ") }
-            if (packageIndex >= 0) {
-                lines.add(packageIndex + 1, "")
-                lines.add(packageIndex + 2, importLine)
-                lines.joinToString("\n")
-            } else {
-                "$importLine\n$content"
-            }
-        }
-    }
-
     private fun Path.readTextSafely(): String =
         runCatching { takeIf { Files.size(it) < 200_000 }?.readText() }.getOrNull().orEmpty()
 }
 
 object KotlinInjectRegistrationPlanner {
-    fun plan(moduleRoot: Path, dependencyName: String, dependencyImport: String): RegistrationPlan {
-        if (!moduleRoot.exists()) return todoPlan(dependencyName, "Module root does not exist yet.")
+    fun plan(moduleRoot: Path, moduleTypeName: String, moduleImport: String): RegistrationPlan {
+        if (!moduleRoot.exists()) return todoPlan(moduleTypeName, "Module root does not exist yet.")
 
         val candidates = kotlin.runCatching {
             Files.walk(moduleRoot).use { stream ->
@@ -146,46 +107,46 @@ object KotlinInjectRegistrationPlanner {
         }.getOrDefault(emptyList())
 
         candidates.forEach { candidate ->
-            val updated = registerDependency(candidate.readTextSafely(), dependencyName, dependencyImport)
+            val updated = registerModule(candidate.readTextSafely(), moduleTypeName, moduleImport)
             if (updated != null) {
                 return RegistrationPlan(
                     safeToApply = true,
                     targetFile = candidate.toString(),
-                    diffPreview = "+ val $dependencyName",
+                    diffPreview = "+ : $moduleTypeName",
                     warnings = emptyList(),
                     replacementContent = updated
                 )
             }
         }
 
-        return todoPlan(dependencyName, "No Kotlin Inject @Component was safe to update.")
+        return todoPlan(moduleTypeName, "No Kotlin Inject @Component was safe to update.")
     }
+
+    fun registerModule(content: String, moduleTypeName: String, moduleImport: String): String? =
+        KotlinSourcePatcher.addSuperTypeToAnnotatedDeclaration(
+            content = content,
+            annotationName = "Component",
+            superTypeName = moduleTypeName,
+            importFqName = moduleImport
+        )
 
     fun registerDependency(content: String, dependencyName: String, dependencyImport: String): String? {
-        if (dependencyName in content) return null
-        val componentLine = content.lines().indexOfFirst { "@Component" in it }
-        if (componentLine < 0) return null
-
-        val lines = content.lines().toMutableList()
-        val declarationIndex = ((componentLine + 1) until lines.size).firstOrNull { index ->
-            val line = lines[index]
-            "interface " in line || "abstract class " in line
-        } ?: return null
-        val insertAfter = findOpeningBrace(lines, declarationIndex) ?: return null
-        val indent = lines[insertAfter].takeWhile { it.isWhitespace() } + "    "
-        lines.add(insertAfter + 1, "${indent}val $dependencyName: ${dependencyName.replaceFirstChar(Char::uppercase)}")
-
-        return addImport(lines.joinToString("\n"), dependencyImport)
+        return KotlinSourcePatcher.insertInsideAnnotatedDeclaration(
+            content = content,
+            annotationName = "Component",
+            memberLine = "val $dependencyName: ${dependencyName.replaceFirstChar(Char::uppercase)}",
+            importFqName = dependencyImport
+        )
     }
 
-    private fun todoPlan(dependencyName: String, reason: String): RegistrationPlan =
+    private fun todoPlan(moduleTypeName: String, reason: String): RegistrationPlan =
         RegistrationPlan(
             safeToApply = false,
             targetFile = null,
             diffPreview = """
-                // TODO Expose this dependency from your Kotlin Inject @Component.
+                // TODO Add this generated module to your Kotlin Inject @Component supertypes.
                 // Reason: $reason
-                val $dependencyName: ${dependencyName.replaceFirstChar(Char::uppercase)}
+                : $moduleTypeName
             """.trimIndent(),
             warnings = listOf(reason)
         )
@@ -239,7 +200,7 @@ object HiltRegistrationPlanner {
             else -> "@Module($currentArgs, includes = [$moduleName::class])"
         }
 
-        return addImport(content.replaceRange(moduleAnnotation.range, replacement), moduleImport)
+        return KotlinSourcePatcher.addImport(content.replaceRange(moduleAnnotation.range, replacement), moduleImport)
     }
 
     private fun todoPlan(moduleName: String, reason: String): RegistrationPlan =
@@ -253,34 +214,6 @@ object HiltRegistrationPlanner {
             """.trimIndent(),
             warnings = listOf(reason)
         )
-}
-
-private fun findOpeningBrace(lines: List<String>, declarationIndex: Int): Int? {
-    for (index in declarationIndex until minOf(lines.size, declarationIndex + 8)) {
-        if ("{" in lines[index]) return index
-    }
-    return null
-}
-
-private fun addImport(content: String, importFqName: String): String {
-    val importLine = "import $importFqName"
-    if (importLine in content) return content
-
-    val lines = content.lines().toMutableList()
-    val lastImportIndex = lines.indexOfLast { it.startsWith("import ") }
-    return if (lastImportIndex >= 0) {
-        lines.add(lastImportIndex + 1, importLine)
-        lines.joinToString("\n")
-    } else {
-        val packageIndex = lines.indexOfFirst { it.startsWith("package ") }
-        if (packageIndex >= 0) {
-            lines.add(packageIndex + 1, "")
-            lines.add(packageIndex + 2, importLine)
-            lines.joinToString("\n")
-        } else {
-            "$importLine\n$content"
-        }
-    }
 }
 
 private fun Path.readTextSafely(): String =

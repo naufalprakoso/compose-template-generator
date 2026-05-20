@@ -6,6 +6,8 @@ Use the New Compose Feature action to choose a feature name, package, target sou
 
 It supports common KMP and Compose patterns including MVVM, MVI, Slack Circuit, Decompose, simple features, and Clean Architecture. It can also detect common libraries such as Koin, Kotlin Inject, Voyager, Decompose, Circuit, Ktor, Apollo, SQLDelight, and Room.
 
-When project files match common patterns, the plugin can register generated Koin modules, expose Kotlin Inject dependencies, include generated Hilt modules, add Navigation Compose routes to a `NavHost`, add registry-list entries for Voyager/Circuit/Decompose/Appyx, and insert dependency aliases into `commonMain.dependencies`. If the target file is not safe to edit, it creates a TODO patch instead of changing the project automatically.
+When project files match common patterns, the plugin can register generated Koin modules, add generated Kotlin Inject modules to `@Component` supertypes, include generated Hilt modules, add Navigation Compose routes to a `NavHost`, add registry-list entries for Voyager/Circuit/Decompose/Appyx, insert dependency aliases into `commonMain.dependencies`, and preview version-catalog alias updates. If the target file is not safe to edit, it creates a TODO patch instead of changing the project automatically.
 
 The plugin also includes inspections and quick fixes for common Kotlin Multiplatform issues, including Android-only APIs in `commonMain` and missing `actual` implementations.
+
+Privacy: Compose Template Generator runs locally and does not collect telemetry or send project data outside the IDE.

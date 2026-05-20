@@ -4,6 +4,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import com.kmpfeaturekit.di.RegistrationPlan
 import com.kmpfeaturekit.model.NavigationType
+import com.kmpfeaturekit.utils.KotlinSourcePatcher
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.exists
@@ -113,54 +114,23 @@ object NavigationRegistrationPlanner {
         entryExpression: String,
         entryImport: String
     ): String? {
-        if (entryExpression in content) return null
-        val lines = content.lines().toMutableList()
-        val registryIndex = lines.indexOfFirst { line ->
-            registryNames.any { name -> "$name =" in line || "val $name" in line || "var $name" in line } && "listOf(" in line
-        }
-        if (registryIndex < 0) return null
-        val insertIndex = findListClose(lines, registryIndex) ?: return null
-        val indent = lines[insertIndex].takeWhile { it.isWhitespace() } + "    "
-        lines.add(insertIndex, "$indent$entryExpression,")
-        return addImport(lines.joinToString("\n"), entryImport)
+        return KotlinSourcePatcher.appendEntryToNamedList(content, registryNames, entryExpression, entryImport)
     }
 
     fun registerRoute(content: String, routeName: String, featurePackageName: String): String? {
         val routeReference = "${routeName}Route.path"
         if (routeReference in content) return null
-        val navHostLineIndex = content.lines().indexOfFirst { "NavHost(" in it }
-        if (navHostLineIndex < 0) return null
-
-        val lines = content.lines().toMutableList()
-        val insertAfter = findNavHostOpeningBrace(lines, navHostLineIndex) ?: return null
-        val indent = lines[insertAfter].takeWhile { it.isWhitespace() } + "    "
-        lines.add(
-            insertAfter + 1,
-            "${indent}composable($routeReference) { ${routeName}Screen(state = ${routeName}State(), onAction = {}) }"
+        return KotlinSourcePatcher.insertInsideCallBlock(
+            content = content,
+            callName = "NavHost",
+            line = "composable($routeReference) { ${routeName}Screen(state = ${routeName}State(), onAction = {}) }",
+            imports = listOf(
+                "$featurePackageName.navigation.${routeName}Route",
+                "$featurePackageName.presentation.${routeName}Screen",
+                "$featurePackageName.presentation.${routeName}State",
+                "androidx.navigation.compose.composable"
+            )
         )
-
-        val withRoute = addImport(lines.joinToString("\n"), "$featurePackageName.navigation.${routeName}Route")
-        val withScreen = addImport(withRoute, "$featurePackageName.presentation.${routeName}Screen")
-        val withState = addImport(withScreen, "$featurePackageName.presentation.${routeName}State")
-        return addImport(withState, "androidx.navigation.compose.composable")
-    }
-
-    private fun findNavHostOpeningBrace(lines: List<String>, navHostLineIndex: Int): Int? {
-        for (index in navHostLineIndex until minOf(lines.size, navHostLineIndex + 12)) {
-            if ("{" in lines[index]) return index
-        }
-        return null
-    }
-
-    private fun findListClose(lines: List<String>, startIndex: Int): Int? {
-        var depth = 0
-        for (index in startIndex until minOf(lines.size, startIndex + 40)) {
-            val line = lines[index]
-            depth += line.count { it == '(' }
-            depth -= line.count { it == ')' }
-            if (depth == 0 && index > startIndex) return index
-        }
-        return null
     }
 
     private fun planListRegistration(
@@ -234,27 +204,6 @@ object NavigationRegistrationPlanner {
             """.trimIndent(),
             warnings = listOf(reason)
         )
-
-    private fun addImport(content: String, importFqName: String): String {
-        val importLine = "import $importFqName"
-        if (importLine in content) return content
-
-        val lines = content.lines().toMutableList()
-        val lastImportIndex = lines.indexOfLast { it.startsWith("import ") }
-        return if (lastImportIndex >= 0) {
-            lines.add(lastImportIndex + 1, importLine)
-            lines.joinToString("\n")
-        } else {
-            val packageIndex = lines.indexOfFirst { it.startsWith("package ") }
-            if (packageIndex >= 0) {
-                lines.add(packageIndex + 1, "")
-                lines.add(packageIndex + 2, importLine)
-                lines.joinToString("\n")
-            } else {
-                "$importLine\n$content"
-            }
-        }
-    }
 
     private fun Path.readTextSafely(): String =
         runCatching { takeIf { Files.size(it) < 200_000 }?.readText() }.getOrNull().orEmpty()

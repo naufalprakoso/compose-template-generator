@@ -58,10 +58,11 @@ class KmpFeatureWizardDialog(
     private val previewList = JPanel()
     private val previewSelections = linkedMapOf<String, Pair<PlannedFile, JCheckBox>>()
     private val detectedSummary = JBTextArea(5, 48)
+    private val previewWarnings = JBTextArea(4, 48)
     private val scanResult: ProjectScanResult = project.service<ProjectScanService>().scan()
 
     init {
-        title = "New Compose Feature"
+        title = "Compose Template Generator"
         applyDetectedDefaults()
         architecture.addActionListener {
             applyArchitectureCompatibility(
@@ -76,6 +77,7 @@ class KmpFeatureWizardDialog(
         PlatformTarget.entries.forEach { platforms.addItem(it, it.label, true) }
         detectedSummary.isEditable = false
         detectedSummary.text = buildDetectedSummary()
+        previewWarnings.isEditable = false
         previewList.layout = BoxLayout(previewList, BoxLayout.Y_AXIS)
         listOf(featureName, basePackage, targetModule, sourceSetRoot).forEach { field ->
             field.document.addDocumentListener(object : DocumentListener {
@@ -146,8 +148,9 @@ class KmpFeatureWizardDialog(
             .addLabeledComponent("Platforms", platforms)
             .addLabeledComponent("Project style", projectStyle)
             .addSeparator()
-            .addComponent(JBLabel("Dry run preview"))
+            .addComponent(JBLabel("Project changes preview"))
             .addComponent(JBScrollPane(previewList).apply { preferredSize = Dimension(860, 220) })
+            .addLabeledComponent("Warnings", JBScrollPane(previewWarnings).apply { preferredSize = Dimension(860, 96) })
             .panel
 
     private fun applyDetectedDefaults() {
@@ -202,8 +205,14 @@ class KmpFeatureWizardDialog(
                 previewSelections[plannedFile.path] = plannedFile to checkbox
                 previewList.add(checkbox)
             }
+            previewWarnings.text = if (preview.warnings.isEmpty()) {
+                "No warnings. Existing files are still skipped unless selected project changes are safe replacements."
+            } else {
+                preview.warnings.joinToString("\n")
+            }
         } else {
             previewList.add(JBLabel("Enter a valid feature name and base package to preview generated files."))
+            previewWarnings.text = ""
         }
         previewList.revalidate()
         previewList.repaint()

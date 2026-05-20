@@ -49,6 +49,28 @@ class KoinRegistrationPlannerTest {
     }
 
     @Test
+    fun registersModuleInMultilineModulesCall() {
+        val content = """
+            package com.example
+
+            fun initKoin() {
+                modules(
+                    appModule,
+                    networkModule,
+                )
+            }
+        """.trimIndent()
+
+        val updated = KoinRegistrationPlanner.registerModule(
+            content,
+            "paymentHistoryModule",
+            "com.example.paymentHistory.di.paymentHistoryModule"
+        )
+
+        assertContains(updated.orEmpty(), "networkModule,\n        paymentHistoryModule,")
+    }
+
+    @Test
     fun skipsAlreadyRegisteredModule() {
         val content = "fun initKoin() { modules(appModule, paymentHistoryModule) }"
 
@@ -62,7 +84,28 @@ class KoinRegistrationPlannerTest {
     }
 
     @Test
-    fun registersKotlinInjectDependencyInComponent() {
+    fun registersKotlinInjectModuleInComponentSuperTypes() {
+        val content = """
+            package com.example
+
+            import me.tatarka.inject.annotations.Component
+
+            @Component
+            abstract class AppComponent
+        """.trimIndent()
+
+        val updated = KotlinInjectRegistrationPlanner.registerModule(
+            content,
+            "PaymentHistoryInjectModule",
+            "com.example.paymentHistory.di.PaymentHistoryInjectModule"
+        )
+
+        assertContains(updated.orEmpty(), "import com.example.paymentHistory.di.PaymentHistoryInjectModule")
+        assertContains(updated.orEmpty(), "abstract class AppComponent : PaymentHistoryInjectModule")
+    }
+
+    @Test
+    fun keepsLegacyKotlinInjectDependencyExposureAvailable() {
         val content = """
             package com.example
 

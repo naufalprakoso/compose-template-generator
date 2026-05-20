@@ -6,6 +6,7 @@ import com.kmpfeaturekit.model.DependencyInjectionType
 import com.kmpfeaturekit.model.FeatureInfo
 import com.kmpfeaturekit.model.FeatureOptions
 import com.kmpfeaturekit.model.FeatureRequest
+import com.kmpfeaturekit.model.NavigationType
 import com.kmpfeaturekit.templates.PureTemplateRenderer
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
@@ -47,6 +48,48 @@ class GeneratedSampleCompileTest {
                 .associate { it.path.substringAfter("/commonMain/kotlin/") to it.content }
 
             compileKotlinSources("architecture-${architecture.name}", sources + commonStubs())
+        }
+    }
+
+    @Test
+    fun generatedSampleCompilesForSupportedIntegrationStacks() {
+        listOf(
+            DependencyInjectionType.KOIN to NavigationType.NAVIGATION_COMPOSE,
+            DependencyInjectionType.KOTLIN_INJECT to NavigationType.VOYAGER,
+            DependencyInjectionType.HILT_ANDROID_ONLY to NavigationType.NAVIGATION_COMPOSE,
+            DependencyInjectionType.MANUAL to NavigationType.DECOMPOSE_NAVIGATION
+        ).forEach { (diType, navigationType) ->
+            val request = FeatureRequest(
+                info = FeatureInfo(
+                    featureName = "Payment History",
+                    basePackage = "com.example",
+                    targetModule = "shared",
+                    sourceSetRoot = createTempDirectory().resolve("shared/src").pathString
+                ),
+                architecture = ArchitectureSelection(
+                    architectureType = ArchitectureType.MVVM,
+                    dependencyInjectionType = diType,
+                    navigationType = navigationType
+                ),
+                options = FeatureOptions(
+                    autoRegisterDi = false,
+                    autoRegisterNavigation = false,
+                    unitTests = false
+                )
+            )
+
+            val sources = builder.build(request)
+                .filter { it.path.contains("/commonMain/") || it.path.contains("/androidMain/") }
+                .filter { it.path.endsWith(".kt") }
+                .associate { file ->
+                    val sourceRoot = when {
+                        file.path.contains("/commonMain/kotlin/") -> "/commonMain/kotlin/"
+                        else -> "/androidMain/kotlin/"
+                    }
+                    file.path.substringAfter(sourceRoot) to file.content
+                }
+
+            compileKotlinSources("integration-${diType.name}-${navigationType.name}", sources + commonStubs() + integrationStubs())
         }
     }
 
@@ -194,6 +237,47 @@ class GeneratedSampleCompileTest {
             class MutableStateFlow<T>(var value: T) : StateFlow<T>
 
             fun <T> MutableStateFlow<T>.asStateFlow(): StateFlow<T> = this
+        """.trimIndent()
+    )
+
+    private fun integrationStubs(): Map<String, String> = mapOf(
+        "org/koin/core/module/Module.kt" to """
+            package org.koin.core.module
+
+            class Module {
+                inline fun <reified T> single(noinline definition: () -> T) {}
+                fun factory(definition: () -> Any?) {}
+                fun <T> get(): T = error("stub")
+            }
+        """.trimIndent(),
+        "org/koin/dsl/ModuleDsl.kt" to """
+            package org.koin.dsl
+
+            import org.koin.core.module.Module
+
+            fun module(block: Module.() -> Unit): Module = Module().apply(block)
+            fun <T> get(): T = error("stub")
+        """.trimIndent(),
+        "me/tatarka/inject/annotations/Provides.kt" to """
+            package me.tatarka.inject.annotations
+
+            annotation class Provides
+        """.trimIndent(),
+        "dagger/Dagger.kt" to """
+            package dagger
+
+            annotation class Module(val includes: Array<kotlin.reflect.KClass<*>> = [])
+            annotation class Provides
+        """.trimIndent(),
+        "dagger/hilt/InstallIn.kt" to """
+            package dagger.hilt
+
+            annotation class InstallIn(vararg val value: kotlin.reflect.KClass<*>)
+        """.trimIndent(),
+        "dagger/hilt/components/SingletonComponent.kt" to """
+            package dagger.hilt.components
+
+            interface SingletonComponent
         """.trimIndent()
     )
 }

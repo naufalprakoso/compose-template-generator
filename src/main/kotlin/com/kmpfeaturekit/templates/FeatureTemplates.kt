@@ -397,7 +397,8 @@ object FeatureTemplates {
         }
 
         class {{FeatureNamePascal}}Dependencies(
-            val observe{{FeatureNamePascal}}: Observe{{FeatureNamePascal}}UseCase
+            val observe{{FeatureNamePascal}}: Observe{{FeatureNamePascal}}UseCase =
+                Observe{{FeatureNamePascal}}UseCase(Default{{FeatureNamePascal}}Service(Default{{FeatureNamePascal}}Repository()))
         )
     """.trimIndent()
 

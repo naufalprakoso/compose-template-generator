@@ -18,7 +18,6 @@ class KmpFeatureKitSettings : PersistentStateComponent<KmpFeatureKitSettings.Sta
         var defaultPackagePattern: String = "features.{featureName}",
         var routeStyle: String = "typed-object",
         var generatePreviews: Boolean = true,
-        var telemetryEnabled: Boolean = false,
         var inspectionSeverity: String = "WARNING"
     )
 

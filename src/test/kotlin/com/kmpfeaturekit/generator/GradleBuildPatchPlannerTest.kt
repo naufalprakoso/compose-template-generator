@@ -45,4 +45,29 @@ class GradleBuildPatchPlannerTest {
             )
         )
     }
+
+    @Test
+    fun insertsMissingAliasesIntoVersionCatalogLibrariesSection() {
+        val catalog = """
+            [versions]
+            kotlin = "2.2.21"
+
+            [libraries]
+            kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+        """.trimIndent()
+
+        val updated = GradleBuildPatchPlanner.insertLibraryAliases(
+            catalog,
+            listOf(
+                GradleBuildPatchPlanner.DependencyAlias(
+                    alias = "koin-core",
+                    module = "io.insert-koin:koin-core",
+                    version = "4.1.0"
+                )
+            )
+        )
+
+        assertContains(updated, "koin-core = { module = \"io.insert-koin:koin-core\", version = \"4.1.0\" }")
+        assertContains(updated, "[libraries]")
+    }
 }

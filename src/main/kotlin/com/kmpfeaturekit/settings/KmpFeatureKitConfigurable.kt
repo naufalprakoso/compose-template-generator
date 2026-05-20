@@ -13,7 +13,6 @@ class KmpFeatureKitConfigurable(private val project: Project) : Configurable {
     private val packagePattern = JBTextField()
     private val routeStyle = JBTextField()
     private val generatePreviews = JBCheckBox("Generate Compose previews by default")
-    private val telemetry = JBCheckBox("Enable telemetry")
     private var panel: JPanel? = null
 
     override fun getDisplayName(): String = "Compose Template Generator"
@@ -23,12 +22,10 @@ class KmpFeatureKitConfigurable(private val project: Project) : Configurable {
         packagePattern.text = settings.defaultPackagePattern
         routeStyle.text = settings.routeStyle
         generatePreviews.isSelected = settings.generatePreviews
-        telemetry.isSelected = settings.telemetryEnabled
         panel = FormBuilder.createFormBuilder()
             .addLabeledComponent("Default package pattern", packagePattern)
             .addLabeledComponent("Route style", routeStyle)
             .addComponent(generatePreviews)
-            .addComponent(telemetry)
             .addComponentFillVertically(JPanel(), 0)
             .panel
         return panel!!
@@ -38,8 +35,7 @@ class KmpFeatureKitConfigurable(private val project: Project) : Configurable {
         val settings = project.service<KmpFeatureKitSettings>().state
         return packagePattern.text != settings.defaultPackagePattern ||
             routeStyle.text != settings.routeStyle ||
-            generatePreviews.isSelected != settings.generatePreviews ||
-            telemetry.isSelected != settings.telemetryEnabled
+            generatePreviews.isSelected != settings.generatePreviews
     }
 
     override fun apply() {
@@ -47,7 +43,6 @@ class KmpFeatureKitConfigurable(private val project: Project) : Configurable {
         settings.defaultPackagePattern = packagePattern.text
         settings.routeStyle = routeStyle.text
         settings.generatePreviews = generatePreviews.isSelected
-        settings.telemetryEnabled = telemetry.isSelected
     }
 
     override fun reset() {
@@ -55,6 +50,5 @@ class KmpFeatureKitConfigurable(private val project: Project) : Configurable {
         packagePattern.text = settings.defaultPackagePattern
         routeStyle.text = settings.routeStyle
         generatePreviews.isSelected = settings.generatePreviews
-        telemetry.isSelected = settings.telemetryEnabled
     }
 }

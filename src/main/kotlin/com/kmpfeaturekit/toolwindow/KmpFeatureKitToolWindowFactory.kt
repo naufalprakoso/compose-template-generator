@@ -43,8 +43,8 @@ class KmpFeatureKitToolWindowFactory : ToolWindowFactory {
             appendLine()
             appendLine("Health checks:")
             appendLine("- Missing actuals: run inspections")
-            appendLine("- Missing DI registrations: run inspections")
-            appendLine("- Missing navigation routes: run inspections")
+            appendLine("- Missing DI registrations: review generated integration preview")
+            appendLine("- Missing navigation routes: review generated integration preview")
             appendLine("- Architecture inconsistencies: run inspections")
         }
     }

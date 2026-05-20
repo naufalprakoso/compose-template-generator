@@ -111,7 +111,7 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
             }
         }
 
-        files += gradleFile(moduleRoot, request, vars)
+        files += gradleFiles(moduleRoot, request, vars)
 
         return files
     }
@@ -131,8 +131,8 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
             )
             DependencyInjectionType.KOTLIN_INJECT -> KotlinInjectRegistrationPlanner.plan(
                 moduleRoot = Path.of(moduleRoot),
-                dependencyName = "${names.camelCase}Dependencies",
-                dependencyImport = "${request.info.basePackage}.${names.camelCase}.di.${names.pascalCase}Dependencies"
+                moduleTypeName = "${names.pascalCase}InjectModule",
+                moduleImport = "${request.info.basePackage}.${names.camelCase}.di.${names.pascalCase}InjectModule"
             )
             DependencyInjectionType.HILT_ANDROID_ONLY -> HiltRegistrationPlanner.plan(
                 moduleRoot = Path.of(moduleRoot),
@@ -191,7 +191,7 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
         )
     }
 
-    private fun gradleFile(moduleRoot: String, request: FeatureRequest, vars: Map<String, String>): PlannedFile {
+    private fun gradleFiles(moduleRoot: String, request: FeatureRequest, vars: Map<String, String>): List<PlannedFile> {
         val ktsPath = Path.of(moduleRoot, "build.gradle.kts")
         val groovyPath = Path.of(moduleRoot, "build.gradle")
         val useKts = ktsPath.exists() || !groovyPath.exists()
@@ -208,12 +208,23 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
         } else {
             GradleBuildPatch(renderer(template, vars), replacesFile = false, warnings = emptyList())
         }
-        return PlannedFile(
-            path = path,
-            content = gradlePatch.content,
-            kind = if (exists) PlannedFileKind.MODIFY else PlannedFileKind.CREATE,
-            replacesFile = gradlePatch.replacesFile
+        val files = mutableListOf(
+            PlannedFile(
+                path = path,
+                content = gradlePatch.content,
+                kind = if (exists) PlannedFileKind.MODIFY else PlannedFileKind.CREATE,
+                replacesFile = gradlePatch.replacesFile
+            )
         )
+        gradlePatch.catalogPatch?.let { catalog ->
+            files += PlannedFile(
+                path = catalog.path,
+                content = catalog.content,
+                kind = PlannedFileKind.MODIFY,
+                replacesFile = catalog.replacesFile
+            )
+        }
+        return files
     }
 
     private fun variables(request: FeatureRequest): Map<String, String> {
