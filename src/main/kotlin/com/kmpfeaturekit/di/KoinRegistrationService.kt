@@ -2,8 +2,19 @@ package com.kmpfeaturekit.di
 
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.io.path.exists
+import kotlin.io.path.isRegularFile
+import kotlin.io.path.readText
 
-data class RegistrationPlan(val safeToApply: Boolean, val targetFile: String?, val diffPreview: String, val warnings: List<String>)
+data class RegistrationPlan(
+    val safeToApply: Boolean,
+    val targetFile: String?,
+    val diffPreview: String,
+    val warnings: List<String>,
+    val replacementContent: String? = null
+)
 
 @Service(Service.Level.PROJECT)
 class KoinRegistrationService(@Suppress("UNUSED_PARAMETER") private val project: Project) {
@@ -15,4 +26,105 @@ class KoinRegistrationService(@Suppress("UNUSED_PARAMETER") private val project:
             RegistrationPlan(true, target, "+ modules($featureModuleName)", emptyList())
         }
     }
+}
+
+object KoinRegistrationPlanner {
+    fun plan(moduleRoot: Path, featureModuleName: String, featureModuleImport: String): RegistrationPlan {
+        if (!moduleRoot.exists()) {
+            return todoPlan(featureModuleName, "Module root does not exist yet.")
+        }
+
+        val candidates = kotlin.runCatching {
+            Files.walk(moduleRoot).use { stream ->
+                stream
+                    .filter { it.isRegularFile() && it.fileName.toString().endsWith(".kt") }
+                    .filter { path ->
+                        val text = path.readTextSafely()
+                        "modules(" in text || "startKoin" in text
+                    }
+                    .sorted(compareByDescending<Path> { path -> "startKoin" in path.readTextSafely() })
+                    .toList()
+            }
+        }.getOrDefault(emptyList())
+
+        candidates.forEach { candidate ->
+            val existing = candidate.readTextSafely()
+            val updated = registerModule(existing, featureModuleName, featureModuleImport)
+            if (updated != null) {
+                return RegistrationPlan(
+                    safeToApply = true,
+                    targetFile = candidate.toString(),
+                    diffPreview = "+ modules(..., $featureModuleName)",
+                    warnings = emptyList(),
+                    replacementContent = updated
+                )
+            }
+        }
+
+        return todoPlan(featureModuleName, "No Koin modules(...) call was safe to update.")
+    }
+
+    fun registerModule(content: String, featureModuleName: String, featureModuleImport: String): String? {
+        if (featureModuleName in content) return null
+
+        val listOfRegex = Regex("""modules\(\s*listOf\(([^)]*)\)\s*\)""", RegexOption.DOT_MATCHES_ALL)
+        val listMatch = listOfRegex.find(content)
+        if (listMatch != null) {
+            val existingModules = listMatch.groupValues[1].trim()
+            val replacement = if (existingModules.isBlank()) {
+                "modules(listOf($featureModuleName))"
+            } else {
+                "modules(listOf($existingModules, $featureModuleName))"
+            }
+            return addImport(content.replaceRange(listMatch.range, replacement), featureModuleImport)
+        }
+
+        val modulesRegex = Regex("""modules\(([^)]*)\)""", RegexOption.DOT_MATCHES_ALL)
+        val modulesMatch = modulesRegex.find(content) ?: return null
+        val existingModules = modulesMatch.groupValues[1].trim()
+        if ('\n' in existingModules || "{" in existingModules) return null
+
+        val replacement = if (existingModules.isBlank()) {
+            "modules($featureModuleName)"
+        } else {
+            "modules($existingModules, $featureModuleName)"
+        }
+        return addImport(content.replaceRange(modulesMatch.range, replacement), featureModuleImport)
+    }
+
+    private fun todoPlan(featureModuleName: String, reason: String): RegistrationPlan =
+        RegistrationPlan(
+            safeToApply = false,
+            targetFile = null,
+            diffPreview = """
+                // TODO Register this feature module in your Koin composition root.
+                // Reason: $reason
+                modules($featureModuleName)
+            """.trimIndent(),
+            warnings = listOf(reason)
+        )
+
+    private fun addImport(content: String, importFqName: String): String {
+        val importLine = "import $importFqName"
+        if (importLine in content) return content
+
+        val lines = content.lines().toMutableList()
+        val lastImportIndex = lines.indexOfLast { it.startsWith("import ") }
+        return if (lastImportIndex >= 0) {
+            lines.add(lastImportIndex + 1, importLine)
+            lines.joinToString("\n")
+        } else {
+            val packageIndex = lines.indexOfFirst { it.startsWith("package ") }
+            if (packageIndex >= 0) {
+                lines.add(packageIndex + 1, "")
+                lines.add(packageIndex + 2, importLine)
+                lines.joinToString("\n")
+            } else {
+                "$importLine\n$content"
+            }
+        }
+    }
+
+    private fun Path.readTextSafely(): String =
+        runCatching { takeIf { Files.size(it) < 200_000 }?.readText() }.getOrNull().orEmpty()
 }

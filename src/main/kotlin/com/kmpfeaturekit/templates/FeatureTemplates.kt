@@ -337,12 +337,14 @@ object FeatureTemplates {
         import {{packageName}}.domain.Observe{{FeatureNamePascal}}UseCase
         import {{packageName}}.domain.{{FeatureNamePascal}}Repository
         import {{packageName}}.domain.{{FeatureNamePascal}}Service
+        {{stateHolderImport}}
         import org.koin.dsl.module
 
         val {{featureNameCamel}}Module = module {
             single<{{FeatureNamePascal}}Repository> { Default{{FeatureNamePascal}}Repository() }
             single<{{FeatureNamePascal}}Service> { Default{{FeatureNamePascal}}Service(get()) }
             factory { Observe{{FeatureNamePascal}}UseCase(get()) }
+            {{stateHolderKoinRegistration}}
         }
     """.trimIndent()
 

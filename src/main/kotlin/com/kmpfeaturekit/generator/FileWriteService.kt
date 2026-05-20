@@ -23,7 +23,15 @@ class FileWriteService(@Suppress("UNUSED_PARAMETER") private val project: Projec
                 val path = Path.of(planned.path)
                 if (planned.kind == PlannedFileKind.MODIFY && path.exists()) {
                     val existing = Files.readString(path)
-                    if (planned.content.trim() in existing) {
+                    if (planned.replacesFile) {
+                        if (planned.content == existing) {
+                            skipped += planned.path
+                        } else {
+                            Files.writeString(path, planned.content)
+                            LocalFileSystem.getInstance().refreshAndFindFileByNioFile(path)
+                            written += planned.path
+                        }
+                    } else if (planned.content.trim() in existing) {
                         skipped += planned.path
                     } else {
                         Files.writeString(path, existing.trimEnd() + "\n\n" + planned.content.trimEnd() + "\n")

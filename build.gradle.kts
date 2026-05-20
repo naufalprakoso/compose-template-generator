@@ -50,7 +50,7 @@ intellijPlatform {
         """.trimIndent()
 
         changeNotes = """
-            Initial release with the New Compose Feature wizard, dry-run preview, source-set detection, inspections, settings, and Marketplace publishing support.
+            Adds safe Koin module registration, Navigation Compose route registration, version-catalog dependency insertion, and a project scan API cleanup.
         """.trimIndent()
     }
 

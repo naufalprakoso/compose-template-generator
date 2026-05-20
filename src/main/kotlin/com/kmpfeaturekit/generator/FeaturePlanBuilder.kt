@@ -6,6 +6,9 @@ import com.kmpfeaturekit.model.FeatureRequest
 import com.kmpfeaturekit.model.PlatformTarget
 import com.kmpfeaturekit.model.PlannedFile
 import com.kmpfeaturekit.model.PlannedFileKind
+import com.kmpfeaturekit.di.KoinRegistrationPlanner
+import com.kmpfeaturekit.model.NavigationType
+import com.kmpfeaturekit.navigation.NavigationRegistrationPlanner
 import com.kmpfeaturekit.templates.FeatureTemplates
 import java.nio.file.Path
 import java.time.LocalDate
@@ -69,6 +72,14 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
             }
             add("di/${names.pascalCase}Graph.kt", graphTemplate)
         }
+
+        if (request.options.autoRegisterDi && request.architecture.dependencyInjectionType == DependencyInjectionType.KOIN) {
+            files += koinRegistrationFile(request, moduleRoot, featureRoot)
+        }
+        if (request.options.autoRegisterNavigation && request.architecture.navigationType == NavigationType.NAVIGATION_COMPOSE) {
+            files += navigationRegistrationFile(request, moduleRoot, featureRoot)
+        }
+
         if (request.options.fakeRepository) add("testing/Fake${names.pascalCase}Repository.kt", FeatureTemplates.fakeRepository)
         if (request.options.unitTests) {
             files += PlannedFile("$testRoot/presentation/${names.pascalCase}StateTest.kt", renderer(FeatureTemplates.test, vars))
@@ -91,12 +102,54 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
             }
         }
 
-        files += gradleFile(moduleRoot, vars)
+        files += gradleFile(moduleRoot, request, vars)
 
         return files
     }
 
-    private fun gradleFile(moduleRoot: String, vars: Map<String, String>): PlannedFile {
+    private fun koinRegistrationFile(request: FeatureRequest, moduleRoot: String, featureRoot: String): PlannedFile {
+        val names = request.info.names
+        val plan = KoinRegistrationPlanner.plan(
+            moduleRoot = Path.of(moduleRoot),
+            featureModuleName = "${names.camelCase}Module",
+            featureModuleImport = "${request.info.basePackage}.${names.camelCase}.di.${names.camelCase}Module"
+        )
+        return plan.replacementContent?.let { replacement ->
+            PlannedFile(
+                path = requireNotNull(plan.targetFile),
+                content = replacement,
+                kind = PlannedFileKind.MODIFY,
+                replacesFile = true
+            )
+        } ?: PlannedFile(
+            path = "$featureRoot/integration/${names.pascalCase}KoinRegistration.todo.kt",
+            content = plan.diffPreview,
+            kind = PlannedFileKind.CREATE
+        )
+    }
+
+    private fun navigationRegistrationFile(request: FeatureRequest, moduleRoot: String, featureRoot: String): PlannedFile {
+        val names = request.info.names
+        val plan = NavigationRegistrationPlanner.planNavigationCompose(
+            moduleRoot = Path.of(moduleRoot),
+            routeName = names.pascalCase,
+            featurePackageName = "${request.info.basePackage}.${names.camelCase}"
+        )
+        return plan.replacementContent?.let { replacement ->
+            PlannedFile(
+                path = requireNotNull(plan.targetFile),
+                content = replacement,
+                kind = PlannedFileKind.MODIFY,
+                replacesFile = true
+            )
+        } ?: PlannedFile(
+            path = "$featureRoot/integration/${names.pascalCase}NavigationRegistration.todo.kt",
+            content = plan.diffPreview,
+            kind = PlannedFileKind.CREATE
+        )
+    }
+
+    private fun gradleFile(moduleRoot: String, request: FeatureRequest, vars: Map<String, String>): PlannedFile {
         val ktsPath = Path.of(moduleRoot, "build.gradle.kts")
         val groovyPath = Path.of(moduleRoot, "build.gradle")
         val useKts = ktsPath.exists() || !groovyPath.exists()
@@ -108,10 +161,16 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
             exists -> FeatureTemplates.buildGradleGroovyPatch
             else -> FeatureTemplates.buildGradleGroovy
         }
+        val gradlePatch = if (exists) {
+            GradleBuildPatchPlanner.plan(Path.of(path), request, renderer(template, vars))
+        } else {
+            GradleBuildPatch(renderer(template, vars), replacesFile = false, warnings = emptyList())
+        }
         return PlannedFile(
             path = path,
-            content = renderer(template, vars),
-            kind = if (exists) PlannedFileKind.MODIFY else PlannedFileKind.CREATE
+            content = gradlePatch.content,
+            kind = if (exists) PlannedFileKind.MODIFY else PlannedFileKind.CREATE,
+            replacesFile = gradlePatch.replacesFile
         )
     }
 
@@ -126,8 +185,35 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
             "moduleName" to request.info.targetModule,
             "architectureType" to request.architecture.architectureType.label,
             "navigationType" to request.architecture.navigationType.label,
+            "stateHolderImport" to stateHolderImport(request),
+            "stateHolderKoinRegistration" to stateHolderKoinRegistration(request),
             "date" to LocalDate.now().toString(),
             "author" to System.getProperty("user.name", "")
         )
+    }
+
+    private fun stateHolderImport(request: FeatureRequest): String {
+        val names = request.info.names
+        val base = "${request.info.basePackage}.${names.camelCase}.presentation"
+        return when (request.architecture.architectureType) {
+            ArchitectureType.MVVM,
+            ArchitectureType.CLEAN_ARCHITECTURE,
+            ArchitectureType.SIMPLE_FEATURE -> "import $base.${names.pascalCase}ViewModel"
+            ArchitectureType.MVI -> "import $base.${names.pascalCase}Store"
+            ArchitectureType.SLACK_CIRCUIT -> "import $base.${names.pascalCase}Presenter"
+            ArchitectureType.DECOMPOSE -> ""
+        }
+    }
+
+    private fun stateHolderKoinRegistration(request: FeatureRequest): String {
+        val names = request.info.names
+        return when (request.architecture.architectureType) {
+            ArchitectureType.MVVM,
+            ArchitectureType.CLEAN_ARCHITECTURE,
+            ArchitectureType.SIMPLE_FEATURE -> "factory { ${names.pascalCase}ViewModel(get()) }"
+            ArchitectureType.MVI -> "factory { ${names.pascalCase}Store(get(), get()) }"
+            ArchitectureType.SLACK_CIRCUIT -> "factory { ${names.pascalCase}Presenter(get()) }"
+            ArchitectureType.DECOMPOSE -> ""
+        }
     }
 }

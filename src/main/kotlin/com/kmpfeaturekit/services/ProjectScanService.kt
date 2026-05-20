@@ -2,12 +2,14 @@ package com.kmpfeaturekit.services
 
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import com.kmpfeaturekit.model.ArchitectureType
 import com.kmpfeaturekit.model.ArchitectureCompatibility
 import com.kmpfeaturekit.model.DependencyInjectionType
 import com.kmpfeaturekit.model.NavigationType
+import java.nio.file.Path
 
 data class ProjectScanResult(
     val detectedLibraries: Set<String>,
@@ -23,7 +25,9 @@ class ProjectScanService(private val project: Project) {
         var hasKotlinGradle = false
         var hasGroovyGradle = false
         val text = buildString {
-            project.baseDir?.let { root ->
+            project.basePath
+                ?.let { LocalFileSystem.getInstance().findFileByNioFile(Path.of(it)) }
+                ?.let { root ->
                 VfsUtilCore.visitChildrenRecursively(root, object : com.intellij.openapi.vfs.VirtualFileVisitor<Unit>() {
                     override fun visitFile(file: VirtualFile): Boolean {
                         if (file.name == "build.gradle.kts") hasKotlinGradle = true
