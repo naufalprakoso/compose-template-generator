@@ -12,7 +12,8 @@ The plugin is meant for projects that already have a preferred app structure but
 - Detects common project libraries such as Koin, Kotlin Inject, Voyager, Decompose, Circuit, Ktor, Apollo, SQLDelight, and Room.
 - Shows a dry-run preview before writing files and skips existing files by default.
 - Adds inspections and quick fixes for common KMP mistakes, including Android-only APIs in `commonMain` and missing `actual` implementations.
-- Can register generated Koin modules and Navigation Compose routes when the existing project file has a recognizable shape.
+- Can register generated Koin modules, Kotlin Inject components, Hilt modules, and supported navigation entries when the existing project file has a recognizable shape.
+- Supports Navigation Compose plus registry-list wiring for Voyager, Circuit, Decompose, and Appyx.
 - Can add dependency lines to `commonMain.dependencies` when matching aliases exist in `gradle/libs.versions.toml`.
 
 The generated Gradle, DI, and navigation patches are intentionally conservative. When the plugin cannot safely edit an integration point, it creates a TODO-style patch instead of changing project wiring silently.

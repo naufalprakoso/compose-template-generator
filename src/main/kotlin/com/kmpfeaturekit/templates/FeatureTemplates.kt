@@ -372,6 +372,64 @@ object FeatureTemplates {
         }
     """.trimIndent()
 
+    val kotlinInjectDi = """
+        package {{packageName}}.di
+
+        import {{packageName}}.data.Default{{FeatureNamePascal}}Repository
+        import {{packageName}}.data.Default{{FeatureNamePascal}}Service
+        import {{packageName}}.domain.Observe{{FeatureNamePascal}}UseCase
+        import {{packageName}}.domain.{{FeatureNamePascal}}Repository
+        import {{packageName}}.domain.{{FeatureNamePascal}}Service
+        {{stateHolderImport}}
+        import me.tatarka.inject.annotations.Provides
+
+        interface {{FeatureNamePascal}}InjectModule {
+            @Provides
+            fun bind{{FeatureNamePascal}}Repository(): {{FeatureNamePascal}}Repository = Default{{FeatureNamePascal}}Repository()
+
+            @Provides
+            fun bind{{FeatureNamePascal}}Service(repository: {{FeatureNamePascal}}Repository): {{FeatureNamePascal}}Service =
+                Default{{FeatureNamePascal}}Service(repository)
+
+            @Provides
+            fun provideObserve{{FeatureNamePascal}}UseCase(service: {{FeatureNamePascal}}Service): Observe{{FeatureNamePascal}}UseCase =
+                Observe{{FeatureNamePascal}}UseCase(service)
+        }
+
+        class {{FeatureNamePascal}}Dependencies(
+            val observe{{FeatureNamePascal}}: Observe{{FeatureNamePascal}}UseCase
+        )
+    """.trimIndent()
+
+    val hiltModule = """
+        package {{packageName}}.di
+
+        import {{packageName}}.data.Default{{FeatureNamePascal}}Repository
+        import {{packageName}}.data.Default{{FeatureNamePascal}}Service
+        import {{packageName}}.domain.Observe{{FeatureNamePascal}}UseCase
+        import {{packageName}}.domain.{{FeatureNamePascal}}Repository
+        import {{packageName}}.domain.{{FeatureNamePascal}}Service
+        import dagger.Module
+        import dagger.Provides
+        import dagger.hilt.InstallIn
+        import dagger.hilt.components.SingletonComponent
+
+        @Module
+        @InstallIn(SingletonComponent::class)
+        object {{FeatureNamePascal}}Module {
+            @Provides
+            fun provide{{FeatureNamePascal}}Repository(): {{FeatureNamePascal}}Repository = Default{{FeatureNamePascal}}Repository()
+
+            @Provides
+            fun provide{{FeatureNamePascal}}Service(repository: {{FeatureNamePascal}}Repository): {{FeatureNamePascal}}Service =
+                Default{{FeatureNamePascal}}Service(repository)
+
+            @Provides
+            fun provideObserve{{FeatureNamePascal}}UseCase(service: {{FeatureNamePascal}}Service): Observe{{FeatureNamePascal}}UseCase =
+                Observe{{FeatureNamePascal}}UseCase(service)
+        }
+    """.trimIndent()
+
     val manualGraph = """
         package {{packageName}}.di
 
@@ -385,6 +443,10 @@ object FeatureTemplates {
 
         object {{FeatureNamePascal}}NavigationGraph {
             val route = {{FeatureNamePascal}}Route.path
+            val voyagerRoute = route
+            val circuitRoute = route
+            val decomposeConfig = route
+            val appyxNode = route
         }
     """.trimIndent()
 

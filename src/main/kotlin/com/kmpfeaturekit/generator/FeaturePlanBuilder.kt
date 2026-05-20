@@ -6,6 +6,8 @@ import com.kmpfeaturekit.model.FeatureRequest
 import com.kmpfeaturekit.model.PlatformTarget
 import com.kmpfeaturekit.model.PlannedFile
 import com.kmpfeaturekit.model.PlannedFileKind
+import com.kmpfeaturekit.di.HiltRegistrationPlanner
+import com.kmpfeaturekit.di.KotlinInjectRegistrationPlanner
 import com.kmpfeaturekit.di.KoinRegistrationPlanner
 import com.kmpfeaturekit.model.NavigationType
 import com.kmpfeaturekit.navigation.NavigationRegistrationPlanner
@@ -20,6 +22,7 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
         val names = request.info.names
         val packagePath = request.info.basePackage.replace('.', '/')
         val featureRoot = "${request.info.sourceSetRoot}/commonMain/kotlin/$packagePath/${names.camelCase}"
+        val androidFeatureRoot = "${request.info.sourceSetRoot}/androidMain/kotlin/$packagePath/${names.camelCase}"
         val testRoot = "${request.info.sourceSetRoot}/commonTest/kotlin/$packagePath/${names.camelCase}"
         val moduleRoot = request.info.sourceSetRoot.removeSuffix("/src")
         val files = mutableListOf<PlannedFile>()
@@ -59,24 +62,30 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
         if (request.options.diModule) {
             val template = when (request.architecture.dependencyInjectionType) {
                 DependencyInjectionType.KOIN -> FeatureTemplates.koinModule
-                DependencyInjectionType.KOTLIN_INJECT,
-                DependencyInjectionType.HILT_ANDROID_ONLY,
+                DependencyInjectionType.KOTLIN_INJECT -> FeatureTemplates.kotlinInjectDi
+                DependencyInjectionType.HILT_ANDROID_ONLY -> FeatureTemplates.hiltModule
                 DependencyInjectionType.MANUAL -> FeatureTemplates.manualDi
             }
-            add("di/${names.pascalCase}Module.kt", template)
+            if (request.architecture.dependencyInjectionType == DependencyInjectionType.HILT_ANDROID_ONLY) {
+                files += PlannedFile("$androidFeatureRoot/di/${names.pascalCase}Module.kt", renderer(template, vars))
+            } else {
+                add("di/${names.pascalCase}Module.kt", template)
+            }
             val graphTemplate = when (request.architecture.dependencyInjectionType) {
                 DependencyInjectionType.KOIN -> FeatureTemplates.koinGraph
-                DependencyInjectionType.KOTLIN_INJECT,
                 DependencyInjectionType.HILT_ANDROID_ONLY,
+                DependencyInjectionType.KOTLIN_INJECT,
                 DependencyInjectionType.MANUAL -> FeatureTemplates.manualGraph
             }
-            add("di/${names.pascalCase}Graph.kt", graphTemplate)
+            if (request.architecture.dependencyInjectionType != DependencyInjectionType.HILT_ANDROID_ONLY) {
+                add("di/${names.pascalCase}Graph.kt", graphTemplate)
+            }
         }
 
-        if (request.options.autoRegisterDi && request.architecture.dependencyInjectionType == DependencyInjectionType.KOIN) {
-            files += koinRegistrationFile(request, moduleRoot, featureRoot)
+        if (request.options.autoRegisterDi) {
+            files += diRegistrationFile(request, moduleRoot, featureRoot, androidFeatureRoot)
         }
-        if (request.options.autoRegisterNavigation && request.architecture.navigationType == NavigationType.NAVIGATION_COMPOSE) {
+        if (request.options.autoRegisterNavigation) {
             files += navigationRegistrationFile(request, moduleRoot, featureRoot)
         }
 
@@ -107,13 +116,42 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
         return files
     }
 
-    private fun koinRegistrationFile(request: FeatureRequest, moduleRoot: String, featureRoot: String): PlannedFile {
+    private fun diRegistrationFile(
+        request: FeatureRequest,
+        moduleRoot: String,
+        featureRoot: String,
+        androidFeatureRoot: String
+    ): PlannedFile {
         val names = request.info.names
-        val plan = KoinRegistrationPlanner.plan(
-            moduleRoot = Path.of(moduleRoot),
-            featureModuleName = "${names.camelCase}Module",
-            featureModuleImport = "${request.info.basePackage}.${names.camelCase}.di.${names.camelCase}Module"
-        )
+        val plan = when (request.architecture.dependencyInjectionType) {
+            DependencyInjectionType.KOIN -> KoinRegistrationPlanner.plan(
+                moduleRoot = Path.of(moduleRoot),
+                featureModuleName = "${names.camelCase}Module",
+                featureModuleImport = "${request.info.basePackage}.${names.camelCase}.di.${names.camelCase}Module"
+            )
+            DependencyInjectionType.KOTLIN_INJECT -> KotlinInjectRegistrationPlanner.plan(
+                moduleRoot = Path.of(moduleRoot),
+                dependencyName = "${names.camelCase}Dependencies",
+                dependencyImport = "${request.info.basePackage}.${names.camelCase}.di.${names.pascalCase}Dependencies"
+            )
+            DependencyInjectionType.HILT_ANDROID_ONLY -> HiltRegistrationPlanner.plan(
+                moduleRoot = Path.of(moduleRoot),
+                moduleName = "${names.pascalCase}Module",
+                moduleImport = "${request.info.basePackage}.${names.camelCase}.di.${names.pascalCase}Module"
+            )
+            DependencyInjectionType.MANUAL -> return PlannedFile(
+                path = "$featureRoot/integration/${names.pascalCase}ManualDiRegistration.todo.kt",
+                content = """
+                    // TODO Wire ${names.pascalCase}Dependencies into your manual composition root.
+                    ${names.pascalCase}Graph.createDependencies()
+                """.trimIndent()
+            )
+        }
+        val fallbackRoot = if (request.architecture.dependencyInjectionType == DependencyInjectionType.HILT_ANDROID_ONLY) {
+            androidFeatureRoot
+        } else {
+            featureRoot
+        }
         return plan.replacementContent?.let { replacement ->
             PlannedFile(
                 path = requireNotNull(plan.targetFile),
@@ -122,17 +160,21 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
                 replacesFile = true
             )
         } ?: PlannedFile(
-            path = "$featureRoot/integration/${names.pascalCase}KoinRegistration.todo.kt",
+            path = "$fallbackRoot/integration/${names.pascalCase}${request.architecture.dependencyInjectionType.name.toPascalToken()}Registration.todo.kt",
             content = plan.diffPreview,
             kind = PlannedFileKind.CREATE
         )
     }
 
+    private fun String.toPascalToken(): String =
+        lowercase().split('_').joinToString("") { it.replaceFirstChar(Char::uppercase) }
+
     private fun navigationRegistrationFile(request: FeatureRequest, moduleRoot: String, featureRoot: String): PlannedFile {
         val names = request.info.names
-        val plan = NavigationRegistrationPlanner.planNavigationCompose(
+        val plan = NavigationRegistrationPlanner.plan(
             moduleRoot = Path.of(moduleRoot),
             routeName = names.pascalCase,
+            navigationType = request.architecture.navigationType,
             featurePackageName = "${request.info.basePackage}.${names.camelCase}"
         )
         return plan.replacementContent?.let { replacement ->

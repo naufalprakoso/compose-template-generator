@@ -26,6 +26,52 @@ class NavigationRegistrationService(@Suppress("UNUSED_PARAMETER") private val pr
 }
 
 object NavigationRegistrationPlanner {
+    fun plan(
+        moduleRoot: Path,
+        routeName: String,
+        navigationType: NavigationType,
+        featurePackageName: String
+    ): RegistrationPlan =
+        when (navigationType) {
+            NavigationType.NAVIGATION_COMPOSE -> planNavigationCompose(moduleRoot, routeName, featurePackageName)
+            NavigationType.VOYAGER -> planListRegistration(
+                moduleRoot = moduleRoot,
+                routeName = routeName,
+                featurePackageName = featurePackageName,
+                registryNames = listOf("voyagerScreens", "screens"),
+                entryExpression = "${routeName}NavigationGraph.voyagerRoute",
+                importSuffix = "navigation.${routeName}NavigationGraph",
+                label = "Voyager"
+            )
+            NavigationType.CIRCUIT_NAVIGATION -> planListRegistration(
+                moduleRoot = moduleRoot,
+                routeName = routeName,
+                featurePackageName = featurePackageName,
+                registryNames = listOf("circuitScreens", "screenBindings"),
+                entryExpression = "${routeName}NavigationGraph.circuitRoute",
+                importSuffix = "navigation.${routeName}NavigationGraph",
+                label = "Circuit"
+            )
+            NavigationType.DECOMPOSE_NAVIGATION -> planListRegistration(
+                moduleRoot = moduleRoot,
+                routeName = routeName,
+                featurePackageName = featurePackageName,
+                registryNames = listOf("decomposeConfigs", "childConfigs"),
+                entryExpression = "${routeName}NavigationGraph.decomposeConfig",
+                importSuffix = "navigation.${routeName}NavigationGraph",
+                label = "Decompose"
+            )
+            NavigationType.APPYX -> planListRegistration(
+                moduleRoot = moduleRoot,
+                routeName = routeName,
+                featurePackageName = featurePackageName,
+                registryNames = listOf("appyxNodes", "nodes"),
+                entryExpression = "${routeName}NavigationGraph.appyxNode",
+                importSuffix = "navigation.${routeName}NavigationGraph",
+                label = "Appyx"
+            )
+        }
+
     fun planNavigationCompose(
         moduleRoot: Path,
         routeName: String,
@@ -61,6 +107,24 @@ object NavigationRegistrationPlanner {
         return todoPlan(routeName, "No Navigation Compose NavHost was safe to update.")
     }
 
+    fun registerListEntry(
+        content: String,
+        registryNames: List<String>,
+        entryExpression: String,
+        entryImport: String
+    ): String? {
+        if (entryExpression in content) return null
+        val lines = content.lines().toMutableList()
+        val registryIndex = lines.indexOfFirst { line ->
+            registryNames.any { name -> "$name =" in line || "val $name" in line || "var $name" in line } && "listOf(" in line
+        }
+        if (registryIndex < 0) return null
+        val insertIndex = findListClose(lines, registryIndex) ?: return null
+        val indent = lines[insertIndex].takeWhile { it.isWhitespace() } + "    "
+        lines.add(insertIndex, "$indent$entryExpression,")
+        return addImport(lines.joinToString("\n"), entryImport)
+    }
+
     fun registerRoute(content: String, routeName: String, featurePackageName: String): String? {
         val routeReference = "${routeName}Route.path"
         if (routeReference in content) return null
@@ -88,6 +152,63 @@ object NavigationRegistrationPlanner {
         return null
     }
 
+    private fun findListClose(lines: List<String>, startIndex: Int): Int? {
+        var depth = 0
+        for (index in startIndex until minOf(lines.size, startIndex + 40)) {
+            val line = lines[index]
+            depth += line.count { it == '(' }
+            depth -= line.count { it == ')' }
+            if (depth == 0 && index > startIndex) return index
+        }
+        return null
+    }
+
+    private fun planListRegistration(
+        moduleRoot: Path,
+        routeName: String,
+        featurePackageName: String,
+        registryNames: List<String>,
+        entryExpression: String,
+        importSuffix: String,
+        label: String
+    ): RegistrationPlan {
+        if (!moduleRoot.exists()) {
+            return todoPlan(routeName, "Module root does not exist yet.", label, entryExpression)
+        }
+
+        val candidates = kotlin.runCatching {
+            Files.walk(moduleRoot).use { stream ->
+                stream
+                    .filter { it.isRegularFile() && it.fileName.toString().endsWith(".kt") }
+                    .filter { path ->
+                        val text = path.readTextSafely()
+                        registryNames.any { "$it =" in text || "val $it" in text || "var $it" in text }
+                    }
+                    .toList()
+            }
+        }.getOrDefault(emptyList())
+
+        candidates.forEach { candidate ->
+            val updated = registerListEntry(
+                candidate.readTextSafely(),
+                registryNames,
+                entryExpression,
+                "$featurePackageName.$importSuffix"
+            )
+            if (updated != null) {
+                return RegistrationPlan(
+                    safeToApply = true,
+                    targetFile = candidate.toString(),
+                    diffPreview = "+ $entryExpression",
+                    warnings = emptyList(),
+                    replacementContent = updated
+                )
+            }
+        }
+
+        return todoPlan(routeName, "No $label registry list was safe to update.", label, entryExpression)
+    }
+
     private fun todoPlan(routeName: String, reason: String): RegistrationPlan =
         RegistrationPlan(
             safeToApply = false,
@@ -98,6 +219,18 @@ object NavigationRegistrationPlanner {
                 composable(${routeName}Route.path) {
                     ${routeName}Screen(state = ${routeName}State(), onAction = {})
                 }
+            """.trimIndent(),
+            warnings = listOf(reason)
+        )
+
+    private fun todoPlan(routeName: String, reason: String, label: String, entryExpression: String): RegistrationPlan =
+        RegistrationPlan(
+            safeToApply = false,
+            targetFile = null,
+            diffPreview = """
+                // TODO Register this feature in your $label navigation registry.
+                // Reason: $reason
+                $entryExpression
             """.trimIndent(),
             warnings = listOf(reason)
         )

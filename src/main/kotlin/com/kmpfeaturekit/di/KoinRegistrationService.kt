@@ -128,3 +128,160 @@ object KoinRegistrationPlanner {
     private fun Path.readTextSafely(): String =
         runCatching { takeIf { Files.size(it) < 200_000 }?.readText() }.getOrNull().orEmpty()
 }
+
+object KotlinInjectRegistrationPlanner {
+    fun plan(moduleRoot: Path, dependencyName: String, dependencyImport: String): RegistrationPlan {
+        if (!moduleRoot.exists()) return todoPlan(dependencyName, "Module root does not exist yet.")
+
+        val candidates = kotlin.runCatching {
+            Files.walk(moduleRoot).use { stream ->
+                stream
+                    .filter { it.isRegularFile() && it.fileName.toString().endsWith(".kt") }
+                    .filter { path ->
+                        val text = path.readTextSafely()
+                        "@Component" in text || "me.tatarka.inject.annotations.Component" in text
+                    }
+                    .toList()
+            }
+        }.getOrDefault(emptyList())
+
+        candidates.forEach { candidate ->
+            val updated = registerDependency(candidate.readTextSafely(), dependencyName, dependencyImport)
+            if (updated != null) {
+                return RegistrationPlan(
+                    safeToApply = true,
+                    targetFile = candidate.toString(),
+                    diffPreview = "+ val $dependencyName",
+                    warnings = emptyList(),
+                    replacementContent = updated
+                )
+            }
+        }
+
+        return todoPlan(dependencyName, "No Kotlin Inject @Component was safe to update.")
+    }
+
+    fun registerDependency(content: String, dependencyName: String, dependencyImport: String): String? {
+        if (dependencyName in content) return null
+        val componentLine = content.lines().indexOfFirst { "@Component" in it }
+        if (componentLine < 0) return null
+
+        val lines = content.lines().toMutableList()
+        val declarationIndex = ((componentLine + 1) until lines.size).firstOrNull { index ->
+            val line = lines[index]
+            "interface " in line || "abstract class " in line
+        } ?: return null
+        val insertAfter = findOpeningBrace(lines, declarationIndex) ?: return null
+        val indent = lines[insertAfter].takeWhile { it.isWhitespace() } + "    "
+        lines.add(insertAfter + 1, "${indent}val $dependencyName: ${dependencyName.replaceFirstChar(Char::uppercase)}")
+
+        return addImport(lines.joinToString("\n"), dependencyImport)
+    }
+
+    private fun todoPlan(dependencyName: String, reason: String): RegistrationPlan =
+        RegistrationPlan(
+            safeToApply = false,
+            targetFile = null,
+            diffPreview = """
+                // TODO Expose this dependency from your Kotlin Inject @Component.
+                // Reason: $reason
+                val $dependencyName: ${dependencyName.replaceFirstChar(Char::uppercase)}
+            """.trimIndent(),
+            warnings = listOf(reason)
+        )
+}
+
+object HiltRegistrationPlanner {
+    fun plan(moduleRoot: Path, moduleName: String, moduleImport: String): RegistrationPlan {
+        if (!moduleRoot.exists()) return todoPlan(moduleName, "Module root does not exist yet.")
+
+        val candidates = kotlin.runCatching {
+            Files.walk(moduleRoot).use { stream ->
+                stream
+                    .filter { it.isRegularFile() && it.fileName.toString().endsWith(".kt") }
+                    .filter { path ->
+                        val text = path.readTextSafely()
+                        "@Module" in text && "@InstallIn" in text
+                    }
+                    .toList()
+            }
+        }.getOrDefault(emptyList())
+
+        candidates.forEach { candidate ->
+            val updated = includeModule(candidate.readTextSafely(), moduleName, moduleImport)
+            if (updated != null) {
+                return RegistrationPlan(
+                    safeToApply = true,
+                    targetFile = candidate.toString(),
+                    diffPreview = "+ @Module(includes = [$moduleName::class])",
+                    warnings = emptyList(),
+                    replacementContent = updated
+                )
+            }
+        }
+
+        return todoPlan(moduleName, "No Hilt @Module/@InstallIn file was safe to update.")
+    }
+
+    fun includeModule(content: String, moduleName: String, moduleImport: String): String? {
+        if ("$moduleName::class" in content) return null
+        val moduleAnnotation = Regex("""@Module(\(([^)]*)\))?""").find(content) ?: return null
+        val currentArgs = moduleAnnotation.groupValues.getOrNull(2).orEmpty().trim()
+        val replacement = when {
+            currentArgs.isBlank() -> "@Module(includes = [$moduleName::class])"
+            "includes" in currentArgs -> {
+                val includesRegex = Regex("""includes\s*=\s*\[([^]]*)]""")
+                val match = includesRegex.find(currentArgs) ?: return null
+                val existing = match.groupValues[1].trim()
+                val newIncludes = if (existing.isBlank()) "$moduleName::class" else "$existing, $moduleName::class"
+                "@Module(${currentArgs.replaceRange(match.range, "includes = [$newIncludes]")})"
+            }
+            else -> "@Module($currentArgs, includes = [$moduleName::class])"
+        }
+
+        return addImport(content.replaceRange(moduleAnnotation.range, replacement), moduleImport)
+    }
+
+    private fun todoPlan(moduleName: String, reason: String): RegistrationPlan =
+        RegistrationPlan(
+            safeToApply = false,
+            targetFile = null,
+            diffPreview = """
+                // TODO Include this generated Hilt module from an existing @Module if your project requires an aggregate module.
+                // Reason: $reason
+                @Module(includes = [$moduleName::class])
+            """.trimIndent(),
+            warnings = listOf(reason)
+        )
+}
+
+private fun findOpeningBrace(lines: List<String>, declarationIndex: Int): Int? {
+    for (index in declarationIndex until minOf(lines.size, declarationIndex + 8)) {
+        if ("{" in lines[index]) return index
+    }
+    return null
+}
+
+private fun addImport(content: String, importFqName: String): String {
+    val importLine = "import $importFqName"
+    if (importLine in content) return content
+
+    val lines = content.lines().toMutableList()
+    val lastImportIndex = lines.indexOfLast { it.startsWith("import ") }
+    return if (lastImportIndex >= 0) {
+        lines.add(lastImportIndex + 1, importLine)
+        lines.joinToString("\n")
+    } else {
+        val packageIndex = lines.indexOfFirst { it.startsWith("package ") }
+        if (packageIndex >= 0) {
+            lines.add(packageIndex + 1, "")
+            lines.add(packageIndex + 2, importLine)
+            lines.joinToString("\n")
+        } else {
+            "$importLine\n$content"
+        }
+    }
+}
+
+private fun Path.readTextSafely(): String =
+    runCatching { takeIf { Files.size(it) < 200_000 }?.readText() }.getOrNull().orEmpty()

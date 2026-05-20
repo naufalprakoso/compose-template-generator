@@ -60,4 +60,51 @@ class KoinRegistrationPlannerTest {
             )
         )
     }
+
+    @Test
+    fun registersKotlinInjectDependencyInComponent() {
+        val content = """
+            package com.example
+
+            import me.tatarka.inject.annotations.Component
+
+            @Component
+            abstract class AppComponent {
+                abstract val appDependencies: AppDependencies
+            }
+        """.trimIndent()
+
+        val updated = KotlinInjectRegistrationPlanner.registerDependency(
+            content,
+            "paymentHistoryDependencies",
+            "com.example.paymentHistory.di.PaymentHistoryDependencies"
+        )
+
+        assertContains(updated.orEmpty(), "import com.example.paymentHistory.di.PaymentHistoryDependencies")
+        assertContains(updated.orEmpty(), "val paymentHistoryDependencies: PaymentHistoryDependencies")
+    }
+
+    @Test
+    fun includesHiltModuleInAggregateModule() {
+        val content = """
+            package com.example
+
+            import dagger.Module
+            import dagger.hilt.InstallIn
+            import dagger.hilt.components.SingletonComponent
+
+            @Module
+            @InstallIn(SingletonComponent::class)
+            object AppModule
+        """.trimIndent()
+
+        val updated = HiltRegistrationPlanner.includeModule(
+            content,
+            "PaymentHistoryModule",
+            "com.example.paymentHistory.di.PaymentHistoryModule"
+        )
+
+        assertContains(updated.orEmpty(), "import com.example.paymentHistory.di.PaymentHistoryModule")
+        assertContains(updated.orEmpty(), "@Module(includes = [PaymentHistoryModule::class])")
+    }
 }

@@ -28,6 +28,7 @@ dependencies {
     }
 
     testImplementation(kotlin("test"))
+    testImplementation(kotlin("compiler-embeddable"))
     testRuntimeOnly("junit:junit:4.13.2")
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.11.4")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.11.4")
@@ -50,7 +51,7 @@ intellijPlatform {
         """.trimIndent()
 
         changeNotes = """
-            Adds safe Koin module registration, Navigation Compose route registration, version-catalog dependency insertion, and a project scan API cleanup.
+            Adds safe DI and navigation wiring for Koin, Kotlin Inject, Hilt, Navigation Compose, Voyager, Circuit, Decompose, and Appyx, plus generated-source compile smoke tests.
         """.trimIndent()
     }
 
