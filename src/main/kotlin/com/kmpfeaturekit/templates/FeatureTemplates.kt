@@ -138,6 +138,24 @@ object FeatureTemplates {
         }
     """.trimIndent()
 
+    val preview = """
+        package {{packageName}}.presentation
+
+        import androidx.compose.runtime.Composable
+        import org.jetbrains.compose.ui.tooling.preview.Preview
+
+        @Preview
+        @Composable
+        private fun {{FeatureNamePascal}}ScreenPreview() {
+            {{FeatureNamePascal}}Screen(
+                state = {{FeatureNamePascal}}State(
+                    items = listOf({{FeatureNamePascal}}Item(id = "preview", title = "Preview {{FeatureNamePascal}}"))
+                ),
+                onAction = {}
+            )
+        }
+    """.trimIndent()
+
     val mvvmViewModel = """
         package {{packageName}}.presentation
 
@@ -172,6 +190,47 @@ object FeatureTemplates {
                     runCatching { observe{{FeatureNamePascal}}() }
                         .onSuccess { _state.value = {{FeatureNamePascal}}State(items = it) }
                         .onFailure { _state.value = {{FeatureNamePascal}}State(errorMessage = it.message ?: "Unable to load {{FeatureNamePascal}}") }
+                }
+            }
+        }
+    """.trimIndent()
+
+    val plainStateHolder = """
+        package {{packageName}}.presentation
+
+        import {{packageName}}.domain.Observe{{FeatureNamePascal}}UseCase
+        import kotlinx.coroutines.CoroutineScope
+        import kotlinx.coroutines.Dispatchers
+        import kotlinx.coroutines.SupervisorJob
+        import kotlinx.coroutines.flow.MutableStateFlow
+        import kotlinx.coroutines.flow.StateFlow
+        import kotlinx.coroutines.flow.asStateFlow
+        import kotlinx.coroutines.launch
+
+        class {{FeatureNamePascal}}StateHolder(
+            private val observe{{FeatureNamePascal}}: Observe{{FeatureNamePascal}}UseCase,
+            private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        ) {
+            private val _state = MutableStateFlow({{FeatureNamePascal}}State())
+            val state: StateFlow<{{FeatureNamePascal}}State> = _state.asStateFlow()
+
+            fun onAction(action: {{FeatureNamePascal}}Action) {
+                when (action) {
+                    {{FeatureNamePascal}}Action.Started,
+                    {{FeatureNamePascal}}Action.Refresh,
+                    {{FeatureNamePascal}}Action.Retry -> load()
+                    is {{FeatureNamePascal}}Action.ItemSelected -> Unit
+                }
+            }
+
+            private fun load() {
+                scope.launch {
+                    _state.value = _state.value.copy(isLoading = true, errorMessage = null)
+                    _state.value = runCatching { observe{{FeatureNamePascal}}() }
+                        .fold(
+                            onSuccess = { {{FeatureNamePascal}}State(items = it) },
+                            onFailure = { {{FeatureNamePascal}}State(errorMessage = it.message ?: "Unable to load {{FeatureNamePascal}}") }
+                        )
                 }
             }
         }
@@ -289,13 +348,12 @@ object FeatureTemplates {
     val serviceImpl = """
         package {{packageName}}.data
 
-        import {{packageName}}.domain.{{FeatureNamePascal}}Repository
         import {{packageName}}.domain.{{FeatureNamePascal}}Service
+        import {{packageName}}.presentation.{{FeatureNamePascal}}Item
 
-        class Default{{FeatureNamePascal}}Service(
-            private val repository: {{FeatureNamePascal}}Repository
-        ) : {{FeatureNamePascal}}Service {
-            override suspend fun load{{FeatureNamePascal}}() = repository.observe{{FeatureNamePascal}}()
+        class Default{{FeatureNamePascal}}Service : {{FeatureNamePascal}}Service {
+            override suspend fun load{{FeatureNamePascal}}(): List<{{FeatureNamePascal}}Item> =
+                listOf({{FeatureNamePascal}}Item(id = "sample", title = "{{FeatureNamePascal}} item"))
         }
     """.trimIndent()
 
@@ -303,11 +361,14 @@ object FeatureTemplates {
         package {{packageName}}.data
 
         import {{packageName}}.domain.{{FeatureNamePascal}}Repository
+        import {{packageName}}.domain.{{FeatureNamePascal}}Service
         import {{packageName}}.presentation.{{FeatureNamePascal}}Item
 
-        class Default{{FeatureNamePascal}}Repository : {{FeatureNamePascal}}Repository {
+        class Default{{FeatureNamePascal}}Repository(
+            private val service: {{FeatureNamePascal}}Service
+        ) : {{FeatureNamePascal}}Repository {
             override suspend fun observe{{FeatureNamePascal}}(): List<{{FeatureNamePascal}}Item> =
-                listOf({{FeatureNamePascal}}Item(id = "sample", title = "{{FeatureNamePascal}} item"))
+                service.load{{FeatureNamePascal}}()
         }
     """.trimIndent()
 
@@ -315,9 +376,9 @@ object FeatureTemplates {
         package {{packageName}}.domain
 
         class Observe{{FeatureNamePascal}}UseCase(
-            private val service: {{FeatureNamePascal}}Service
+            private val repository: {{FeatureNamePascal}}Repository
         ) {
-            suspend operator fun invoke() = service.load{{FeatureNamePascal}}()
+            suspend operator fun invoke() = repository.observe{{FeatureNamePascal}}()
         }
     """.trimIndent()
 
@@ -341,8 +402,8 @@ object FeatureTemplates {
         import org.koin.dsl.module
 
         val {{featureNameCamel}}Module = module {
-            single<{{FeatureNamePascal}}Repository> { Default{{FeatureNamePascal}}Repository() }
-            single<{{FeatureNamePascal}}Service> { Default{{FeatureNamePascal}}Service(get()) }
+            single<{{FeatureNamePascal}}Service> { Default{{FeatureNamePascal}}Service() }
+            single<{{FeatureNamePascal}}Repository> { Default{{FeatureNamePascal}}Repository(get()) }
             factory { Observe{{FeatureNamePascal}}UseCase(get()) }
             {{stateHolderKoinRegistration}}
         }
@@ -366,9 +427,9 @@ object FeatureTemplates {
         import {{packageName}}.domain.Observe{{FeatureNamePascal}}UseCase
 
         class {{FeatureNamePascal}}Dependencies {
-            private val repository = Default{{FeatureNamePascal}}Repository()
-            private val service = Default{{FeatureNamePascal}}Service(repository)
-            val observe{{FeatureNamePascal}} = Observe{{FeatureNamePascal}}UseCase(service)
+            private val service = Default{{FeatureNamePascal}}Service()
+            private val repository = Default{{FeatureNamePascal}}Repository(service)
+            val observe{{FeatureNamePascal}} = Observe{{FeatureNamePascal}}UseCase(repository)
         }
     """.trimIndent()
 
@@ -385,20 +446,20 @@ object FeatureTemplates {
 
         interface {{FeatureNamePascal}}InjectModule {
             @Provides
-            fun bind{{FeatureNamePascal}}Repository(): {{FeatureNamePascal}}Repository = Default{{FeatureNamePascal}}Repository()
+            fun bind{{FeatureNamePascal}}Service(): {{FeatureNamePascal}}Service = Default{{FeatureNamePascal}}Service()
 
             @Provides
-            fun bind{{FeatureNamePascal}}Service(repository: {{FeatureNamePascal}}Repository): {{FeatureNamePascal}}Service =
-                Default{{FeatureNamePascal}}Service(repository)
+            fun bind{{FeatureNamePascal}}Repository(service: {{FeatureNamePascal}}Service): {{FeatureNamePascal}}Repository =
+                Default{{FeatureNamePascal}}Repository(service)
 
             @Provides
-            fun provideObserve{{FeatureNamePascal}}UseCase(service: {{FeatureNamePascal}}Service): Observe{{FeatureNamePascal}}UseCase =
-                Observe{{FeatureNamePascal}}UseCase(service)
+            fun provideObserve{{FeatureNamePascal}}UseCase(repository: {{FeatureNamePascal}}Repository): Observe{{FeatureNamePascal}}UseCase =
+                Observe{{FeatureNamePascal}}UseCase(repository)
         }
 
         class {{FeatureNamePascal}}Dependencies(
             val observe{{FeatureNamePascal}}: Observe{{FeatureNamePascal}}UseCase =
-                Observe{{FeatureNamePascal}}UseCase(Default{{FeatureNamePascal}}Service(Default{{FeatureNamePascal}}Repository()))
+                Observe{{FeatureNamePascal}}UseCase(Default{{FeatureNamePascal}}Repository(Default{{FeatureNamePascal}}Service()))
         )
     """.trimIndent()
 
@@ -419,15 +480,15 @@ object FeatureTemplates {
         @InstallIn(SingletonComponent::class)
         object {{FeatureNamePascal}}Module {
             @Provides
-            fun provide{{FeatureNamePascal}}Repository(): {{FeatureNamePascal}}Repository = Default{{FeatureNamePascal}}Repository()
+            fun provide{{FeatureNamePascal}}Service(): {{FeatureNamePascal}}Service = Default{{FeatureNamePascal}}Service()
 
             @Provides
-            fun provide{{FeatureNamePascal}}Service(repository: {{FeatureNamePascal}}Repository): {{FeatureNamePascal}}Service =
-                Default{{FeatureNamePascal}}Service(repository)
+            fun provide{{FeatureNamePascal}}Repository(service: {{FeatureNamePascal}}Service): {{FeatureNamePascal}}Repository =
+                Default{{FeatureNamePascal}}Repository(service)
 
             @Provides
-            fun provideObserve{{FeatureNamePascal}}UseCase(service: {{FeatureNamePascal}}Service): Observe{{FeatureNamePascal}}UseCase =
-                Observe{{FeatureNamePascal}}UseCase(service)
+            fun provideObserve{{FeatureNamePascal}}UseCase(repository: {{FeatureNamePascal}}Repository): Observe{{FeatureNamePascal}}UseCase =
+                Observe{{FeatureNamePascal}}UseCase(repository)
         }
     """.trimIndent()
 

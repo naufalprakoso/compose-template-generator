@@ -9,6 +9,8 @@ import com.kmpfeaturekit.model.FeatureRequest
 import com.kmpfeaturekit.model.NavigationType
 import com.kmpfeaturekit.model.PlatformTarget
 import com.kmpfeaturekit.model.PlannedFileKind
+import com.kmpfeaturekit.model.ProjectStyle
+import com.kmpfeaturekit.model.StateHolderType
 import com.kmpfeaturekit.templates.PureTemplateRenderer
 import kotlin.io.path.createDirectories
 import kotlin.io.path.createTempDirectory
@@ -24,14 +26,15 @@ class FeaturePlanBuilderTest {
         val files = builder.build(request(ArchitectureType.MVVM))
         val paths = files.map { it.path }
         assertTrue(paths.any { it.endsWith("PaymentHistoryScreen.kt") })
+        assertTrue(paths.any { it.endsWith("PaymentHistoryPreview.kt") })
         assertTrue(paths.any { it.endsWith("PaymentHistoryViewModel.kt") })
         assertTrue(paths.any { it.endsWith("PaymentHistoryService.kt") })
         assertTrue(paths.any { it.endsWith("DefaultPaymentHistoryService.kt") })
         assertTrue(paths.any { it.endsWith("PaymentHistoryGraph.kt") })
         assertTrue(paths.any { it.endsWith("PaymentHistoryNavigationGraph.kt") })
         assertTrue(paths.any { it.contains("commonTest") && it.endsWith("PaymentHistoryStateTest.kt") })
-        assertTrue(paths.any { it.endsWith("PaymentHistoryKoinRegistration.todo.kt") })
-        assertTrue(paths.any { it.endsWith("PaymentHistoryNavigationRegistration.todo.kt") })
+        assertTrue(paths.any { it.endsWith("PaymentHistoryKoinRegistration.todo.md") })
+        assertTrue(paths.any { it.endsWith("PaymentHistoryNavigationRegistration.todo.md") })
     }
 
     @Test
@@ -44,6 +47,48 @@ class FeaturePlanBuilderTest {
     fun decomposePlanContainsComponent() {
         val files = builder.build(request(ArchitectureType.DECOMPOSE))
         assertTrue(files.any { it.path.endsWith("PaymentHistoryComponent.kt") && "DefaultPaymentHistoryComponent" in it.content })
+    }
+
+    @Test
+    fun stateHolderTypeControlsGeneratedHolderAndDiRegistration() {
+        val files = builder.build(
+            request(ArchitectureType.SIMPLE_FEATURE).copy(
+                architecture = ArchitectureSelection(
+                    architectureType = ArchitectureType.SIMPLE_FEATURE,
+                    stateHolderType = StateHolderType.PLAIN_STATE_HOLDER,
+                    dependencyInjectionType = DependencyInjectionType.KOIN
+                )
+            )
+        )
+
+        assertTrue(files.any { it.path.endsWith("PaymentHistoryStateHolder.kt") && "class PaymentHistoryStateHolder" in it.content })
+        val koinModule = files.single { it.path.endsWith("PaymentHistoryModule.kt") }
+        assertTrue("import com.example.paymentHistory.presentation.PaymentHistoryStateHolder" in koinModule.content)
+        assertTrue("factory { PaymentHistoryStateHolder(get()) }" in koinModule.content)
+        assertTrue(files.none { it.path.endsWith("PaymentHistoryViewModel.kt") })
+    }
+
+    @Test
+    fun projectStyleControlsFeatureLayout() {
+        val layerFiles = builder.build(
+            request(ArchitectureType.MVVM).copy(
+                architecture = ArchitectureSelection(projectStyle = ProjectStyle.LAYER_BASED)
+            )
+        )
+        assertTrue(layerFiles.any {
+            it.path.endsWith("commonMain/kotlin/com/example/presentation/paymentHistory/PaymentHistoryScreen.kt") &&
+                "package com.example.presentation" in it.content
+        })
+
+        val hybridFiles = builder.build(
+            request(ArchitectureType.MVVM).copy(
+                architecture = ArchitectureSelection(projectStyle = ProjectStyle.HYBRID)
+            )
+        )
+        assertTrue(hybridFiles.any {
+            it.path.endsWith("commonMain/kotlin/com/example/features/paymentHistory/presentation/PaymentHistoryScreen.kt") &&
+                "package com.example.features.paymentHistory.presentation" in it.content
+        })
     }
 
     @Test
@@ -182,6 +227,43 @@ class FeaturePlanBuilderTest {
                 assertTrue("}}" !in file.content, "Unresolved template placeholder in ${file.path}")
             }
         }
+    }
+
+    @Test
+    fun repositoryUsesServiceAndUseCaseUsesRepository() {
+        val files = builder.build(request(ArchitectureType.MVVM))
+
+        val service = files.single { it.path.endsWith("DefaultPaymentHistoryService.kt") }
+        assertTrue("class DefaultPaymentHistoryService : PaymentHistoryService" in service.content)
+        assertTrue("DefaultPaymentHistoryService(" !in service.content)
+
+        val repository = files.single { it.path.endsWith("DefaultPaymentHistoryRepository.kt") }
+        assertTrue("private val service: PaymentHistoryService" in repository.content)
+        assertTrue("service.loadPaymentHistory()" in repository.content)
+
+        val useCase = files.single { it.path.endsWith("ObservePaymentHistoryUseCase.kt") }
+        assertTrue("private val repository: PaymentHistoryRepository" in useCase.content)
+        assertTrue("repository.observePaymentHistory()" in useCase.content)
+    }
+
+    @Test
+    fun fileOptionsControlPreviewReadmeAndTests() {
+        val files = builder.build(
+            request(ArchitectureType.MVVM).copy(
+                options = FeatureOptions(
+                    preview = false,
+                    readme = true,
+                    unitTests = false,
+                    autoRegisterDi = false,
+                    autoRegisterNavigation = false
+                )
+            )
+        )
+        val paths = files.map { it.path }
+
+        assertTrue(paths.none { it.endsWith("PaymentHistoryPreview.kt") })
+        assertTrue(paths.any { it.endsWith("README.md") })
+        assertTrue(paths.none { it.endsWith("PaymentHistoryStateTest.kt") })
     }
 
     private fun request(type: ArchitectureType, sourceSetRoot: String = "/tmp/shared") = FeatureRequest(

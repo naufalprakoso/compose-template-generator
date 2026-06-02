@@ -18,5 +18,25 @@ class NameVariantsTest {
     fun rejectsInvalidPackageNames() {
         assertTrue(ValidationUtils.validatePackage("com.example.features").isEmpty())
         assertTrue(ValidationUtils.validatePackage("1.bad").isNotEmpty())
+        assertTrue(ValidationUtils.validatePackage("com.class.feature").isNotEmpty())
+    }
+
+    @Test
+    fun rejectsFeatureNamesThatCannotBecomeKotlinIdentifiers() {
+        assertTrue(ValidationUtils.validateFeatureName("Payment History").isEmpty())
+        assertTrue(ValidationUtils.validateFeatureName("123").isNotEmpty())
+        assertTrue(ValidationUtils.validateFeatureName("!!!").isNotEmpty())
+        assertTrue(ValidationUtils.validateFeatureName("fun").isNotEmpty())
+    }
+
+    @Test
+    fun validatesGenerationTargetFields() {
+        assertTrue(ValidationUtils.validateTargetModule("shared").isEmpty())
+        assertTrue(ValidationUtils.validateTargetModule("").isNotEmpty())
+        assertTrue(ValidationUtils.validateSourceSetRoot("/repo/shared/src").isEmpty())
+        assertTrue(ValidationUtils.validateSourceSetRoot("shared/src").isNotEmpty())
+        assertTrue(ValidationUtils.validateSourceSetRoot("/repo/shared").isNotEmpty())
+        assertTrue(ValidationUtils.validatePlatformSelection(1).isEmpty())
+        assertTrue(ValidationUtils.validatePlatformSelection(0).isNotEmpty())
     }
 }

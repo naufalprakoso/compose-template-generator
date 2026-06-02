@@ -134,6 +134,12 @@ class GeneratedSampleCompileTest {
             @Target(AnnotationTarget.FUNCTION, AnnotationTarget.TYPE)
             annotation class Composable
         """.trimIndent(),
+        "org/jetbrains/compose/ui/tooling/preview/Preview.kt" to """
+            package org.jetbrains.compose.ui.tooling.preview
+
+            @Target(AnnotationTarget.FUNCTION)
+            annotation class Preview
+        """.trimIndent(),
         "androidx/compose/ui/Modifier.kt" to """
             package androidx.compose.ui
 

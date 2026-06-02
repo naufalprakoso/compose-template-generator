@@ -106,28 +106,15 @@ data class FeatureOptions(
     val service: Boolean = true,
     val serviceImplementation: Boolean = true,
     val useCase: Boolean = true,
-    val dto: Boolean = false,
-    val mapper: Boolean = true,
-    val remoteDataSource: Boolean = false,
-    val localDataSource: Boolean = false,
     val navigationRoute: Boolean = true,
     val diModule: Boolean = true,
     val preview: Boolean = true,
     val readme: Boolean = false,
     val fakeRepository: Boolean = true,
-    val mockData: Boolean = true,
     val unitTests: Boolean = true,
-    val snapshotTestsPlaceholder: Boolean = true,
-    val coroutineTestRules: Boolean = true,
-    val turbineTests: Boolean = true,
-    val mockkSupport: Boolean = false,
     val expectActualPlatformAbstraction: Boolean = false,
     val autoRegisterNavigation: Boolean = true,
-    val autoRegisterDi: Boolean = true,
-    val autoCreateSourceSets: Boolean = false,
-    val autoGeneratePreviews: Boolean = true,
-    val autoGenerateTestStubs: Boolean = true,
-    val autoCreateRouteConstants: Boolean = true
+    val autoRegisterDi: Boolean = true
 )
 
 data class FeatureRequest(

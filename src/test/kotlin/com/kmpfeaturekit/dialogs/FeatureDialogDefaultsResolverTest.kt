@@ -22,6 +22,26 @@ class FeatureDialogDefaultsResolverTest {
     }
 
     @Test
+    fun resolvesSourceSetRootFromWindowsStylePath() {
+        assertEquals(
+            "C:/repo/shared/src",
+            FeatureDialogDefaultsResolver.sourceSetRootForPath(
+                "C:\\repo\\shared\\src\\commonMain\\kotlin\\com\\example\\HomeScreen.kt"
+            )
+        )
+    }
+
+    @Test
+    fun resolvesSourceSetRootFromMixedSeparators() {
+        assertEquals(
+            "C:/repo/shared/src",
+            FeatureDialogDefaultsResolver.sourceSetRootForPath(
+                "C:\\repo\\shared/src/androidMain/kotlin/com/example/payment"
+            )
+        )
+    }
+
+    @Test
     fun returnsNullWhenPathIsOutsideKmpSourceSets() {
         assertNull(FeatureDialogDefaultsResolver.sourceSetRootForPath("/repo/settings.gradle.kts"))
     }

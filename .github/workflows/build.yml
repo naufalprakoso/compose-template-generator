@@ -19,5 +19,7 @@ jobs:
         run: ./gradlew test
       - name: Build sample fixture
         run: ./gradlew -p samples/kmp-build-fixture compileKotlinJvm
+      - name: Verify plugin
+        run: ./gradlew verifyPlugin
       - name: Build plugin
         run: ./gradlew buildPlugin

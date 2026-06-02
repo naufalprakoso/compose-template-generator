@@ -6,6 +6,11 @@ plugins {
 group = providers.gradleProperty("pluginGroup").get()
 version = providers.gradleProperty("pluginVersion").get()
 
+val androidStudioPath = providers.gradleProperty("androidStudioPath")
+    .orElse(providers.environmentVariable("ANDROID_STUDIO_PATH"))
+    .orElse("/Applications/Android Studio.app")
+    .get()
+
 kotlin {
     jvmToolchain(17)
 }
@@ -19,7 +24,7 @@ repositories {
 
 dependencies {
     intellijPlatform {
-        local("/Applications/Android Studio.app")
+        local(androidStudioPath)
         bundledPlugin("com.intellij.java")
         bundledPlugin("org.jetbrains.kotlin")
         pluginVerifier()
@@ -61,7 +66,7 @@ intellijPlatform {
 
     pluginVerification {
         ides {
-            local("/Applications/Android Studio.app")
+            local(androidStudioPath)
         }
     }
 }

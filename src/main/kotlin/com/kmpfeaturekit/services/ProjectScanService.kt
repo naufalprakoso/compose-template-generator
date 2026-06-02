@@ -21,20 +21,37 @@ data class ProjectScanResult(
 
 @Service(Service.Level.PROJECT)
 class ProjectScanService(private val project: Project) {
-    fun scan(): ProjectScanResult {
+    private val skippedDirectories = setOf(".git", ".gradle", ".idea", ".kotlin", "build", "out")
+    private val maxScannedCharacters = 2_000_000
+    @Volatile
+    private var cachedResult: ProjectScanResult? = null
+
+    fun scan(forceRefresh: Boolean = false): ProjectScanResult {
+        if (!forceRefresh) cachedResult?.let { return it }
+        return scanProject().also { cachedResult = it }
+    }
+
+    private fun scanProject(): ProjectScanResult {
         var hasKotlinGradle = false
         var hasGroovyGradle = false
+        var scannedCharacters = 0
         val text = buildString {
             project.basePath
                 ?.let { LocalFileSystem.getInstance().findFileByNioFile(Path.of(it)) }
                 ?.let { root ->
                 VfsUtilCore.visitChildrenRecursively(root, object : com.intellij.openapi.vfs.VirtualFileVisitor<Unit>() {
                     override fun visitFile(file: VirtualFile): Boolean {
+                        if (file.isDirectory && file.name in skippedDirectories) return false
+                        if (scannedCharacters >= maxScannedCharacters) return false
                         if (file.name == "build.gradle.kts") hasKotlinGradle = true
                         if (file.name == "build.gradle") hasGroovyGradle = true
                         if (!file.isDirectory && (file.name.endsWith(".gradle.kts") || file.name.endsWith(".gradle") || file.name.endsWith(".kt"))) {
                             runCatching {
-                                if (file.length < 200_000) append(file.inputStream.bufferedReader().readText()).append('\n')
+                                if (file.length < 200_000) {
+                                    val content = file.inputStream.bufferedReader().readText()
+                                    append(content).append('\n')
+                                    scannedCharacters += content.length
+                                }
                             }
                         }
                         return true

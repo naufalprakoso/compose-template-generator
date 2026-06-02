@@ -8,12 +8,14 @@ import com.kmpfeaturekit.model.FeatureRequest
 import com.kmpfeaturekit.model.GenerationResult
 import com.kmpfeaturekit.model.PlannedFileKind
 import com.kmpfeaturekit.templates.TemplateRenderService
+import com.kmpfeaturekit.utils.ValidationUtils
 import kotlin.io.path.Path
 import kotlin.io.path.exists
 
 @Service(Service.Level.PROJECT)
 class FeatureGenerationService(private val project: Project) {
     fun preview(request: FeatureRequest): DryRunPreview {
+        validateRequest(request)
         val templateService = project.service<TemplateRenderService>()
         val builder = FeaturePlanBuilder(templateService::render)
         val files = builder.build(request).map { file ->
@@ -24,9 +26,9 @@ class FeatureGenerationService(private val project: Project) {
             files.filter { it.kind == PlannedFileKind.MODIFY && it.replacesFile }.forEach {
                 add("Will update existing file: ${it.path}")
             }
-            files.filter { it.path.endsWith(".todo.kt") }.forEach {
+            files.filter { it.path.endsWith(".todo.md") }.forEach {
                 val reason = it.content.lineSequence()
-                    .firstOrNull { line -> line.trim().startsWith("// Reason:") }
+                    .firstOrNull { line -> line.trim().startsWith("Reason:") || line.trim().startsWith("// Reason:") }
                     ?.trim()
                     ?.removePrefix("// ")
                 add("Manual review needed for ${it.path.substringAfterLast('/')}${reason?.let { detail -> ": $detail" }.orEmpty()}")
@@ -47,4 +49,17 @@ class FeatureGenerationService(private val project: Project) {
 
     fun generate(files: List<com.kmpfeaturekit.model.PlannedFile>, overwrite: Boolean = false): GenerationResult =
         project.service<FileWriteService>().write(files, overwrite)
+
+    private fun validateRequest(request: FeatureRequest) {
+        val errors = ValidationUtils.validateFeatureInputs(
+            featureName = request.info.featureName,
+            packageName = request.info.basePackage,
+            targetModule = request.info.targetModule,
+            sourceSetRoot = request.info.sourceSetRoot,
+            selectedPlatformCount = request.architecture.platforms.size
+        )
+        require(errors.isEmpty()) {
+            errors.joinToString(separator = " ")
+        }
+    }
 }

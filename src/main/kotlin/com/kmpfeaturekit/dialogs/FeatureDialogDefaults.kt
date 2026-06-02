@@ -54,7 +54,7 @@ object FeatureDialogDefaultsResolver {
         sourceSetRootForPath(virtualFile.path)
 
     fun sourceSetRootForPath(path: String): String? {
-        val normalized = path.removeSuffix("/")
+        val normalized = path.replace('\\', '/').removeSuffix("/")
         val directoryPath = normalized.substringBeforeLast('/', normalized)
         val candidate = if (sourceSetPathPattern.matches(normalized)) normalized else directoryPath
         val srcIndex = candidate.indexOf("/src/")

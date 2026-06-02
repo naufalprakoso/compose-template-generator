@@ -73,12 +73,14 @@
             <add-to-group group-id="ToolsMenu" anchor="last"/>
             <action id="KmpFeatureKit.NewFeatureTools"
                     class="com.kmpfeaturekit.actions.NewKmpFeatureAction"
+                    icon="/icons/plugin.svg"
                     text="New Compose Feature"
                     description="Generate a KMP/CMP feature template"/>
         </group>
 
         <action id="KmpFeatureKit.NewFeature"
                 class="com.kmpfeaturekit.actions.NewKmpFeatureAction"
+                icon="/icons/plugin.svg"
                 text="Compose Feature"
                 description="Generate a KMP/CMP feature template">
             <add-to-group group-id="NewGroup" anchor="last"/>
