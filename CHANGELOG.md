@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3
+
+- Fixes generated file writes so the IntelliJ write command runs on the EDT.
+- Avoids read-access assertions seen on newer Android Studio builds when write actions are triggered from worker threads.
+
 ## 0.1.2
 
 - Adds a guided wizard layout with target, architecture, files, and preview sections.

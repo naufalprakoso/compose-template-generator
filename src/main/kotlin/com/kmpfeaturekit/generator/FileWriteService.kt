@@ -1,5 +1,7 @@
 package com.kmpfeaturekit.generator
 
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
@@ -19,7 +21,7 @@ class FileWriteService(private val project: Project) {
         val warnings = mutableListOf<String>()
         val kotlinNormalizer = KotlinPsiFileNormalizer(project)
 
-        WriteCommandAction.runWriteCommandAction(project, "Generate Compose Feature", null, Runnable {
+        runWriteCommandOnEdt {
             files.forEach { planned ->
                 val path = Path.of(planned.path)
                 val plannedContent = if (path.fileName.toString().endsWith(".kt")) {
@@ -54,8 +56,20 @@ class FileWriteService(private val project: Project) {
                     written += planned.path
                 }
             }
-        })
+        }
 
         return GenerationResult(written, skipped, warnings)
+    }
+
+    private fun runWriteCommandOnEdt(action: () -> Unit) {
+        val application = ApplicationManager.getApplication()
+        val command = Runnable {
+            WriteCommandAction.runWriteCommandAction(project, "Generate Compose Feature", null, Runnable(action))
+        }
+        if (application.isDispatchThread) {
+            command.run()
+        } else {
+            application.invokeAndWait(command, ModalityState.defaultModalityState())
+        }
     }
 }

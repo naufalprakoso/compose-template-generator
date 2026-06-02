@@ -56,7 +56,7 @@ intellijPlatform {
         """.trimIndent()
 
         changeNotes = """
-            Adds a guided feature wizard with presets, file toggles, grouped project-change previews, source-root selection, generated previews, stronger validation, improved post-generate summaries, and safer command-grouped file writes.
+            Fixes generated file writes so the IntelliJ write command is executed on the EDT, avoiding read-access assertions on newer Android Studio builds, and keeps the guided wizard improvements from 0.1.2.
         """.trimIndent()
     }
 
