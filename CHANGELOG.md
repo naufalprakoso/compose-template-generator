@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.2
+
+- Adds a guided wizard layout with target, architecture, files, and preview sections.
+- Adds scaffold presets and working generated file toggles for previews, README files, tests, and optional artifacts.
+- Groups project-change previews into conflicts, modify existing, manual review, and create new.
+- Adds module/source-root selection and debounced preview refresh.
+- Makes `ProjectStyle` and `stateHolderType` affect generated paths, packages, files, and DI registration.
+- Adds a generated Compose preview template and a plain state-holder template.
+- Improves post-generate notifications with written, skipped, and warning summaries.
+- Uses command-grouped file writes through the IntelliJ Platform write-command API.
+- Adds plugin icons and improves local Android Studio path configuration for build/verifier tasks.
+
 ## 0.1.1
 
 - Adds safe auto-registration for Koin `modules(...)` calls when the composition root is recognized.

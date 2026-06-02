@@ -56,7 +56,7 @@ intellijPlatform {
         """.trimIndent()
 
         changeNotes = """
-            Improves DI/navigation wiring, previews version-catalog alias updates, adds clearer project-change warnings, removes the unused telemetry setting, and keeps generated sample compile coverage on version 0.1.1.
+            Adds a guided feature wizard with presets, file toggles, grouped project-change previews, source-root selection, generated previews, stronger validation, improved post-generate summaries, and safer command-grouped file writes.
         """.trimIndent()
     }
 

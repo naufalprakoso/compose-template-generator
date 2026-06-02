@@ -2,7 +2,7 @@
 
 Compose Template Generator is conservative by design: it edits only project files with recognizable structure and writes TODO patches for everything else.
 
-| Area | Supported in 0.1.1 | Fallback |
+| Area | Supported in 0.1.2 | Fallback |
 | --- | --- | --- |
 | Koin | `modules(...)` and `modules(listOf(...))` composition roots | TODO registration file |
 | Kotlin Inject | `@Component` declarations that can accept a generated module supertype | TODO registration file |
