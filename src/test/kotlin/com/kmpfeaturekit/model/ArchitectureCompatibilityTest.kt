@@ -26,6 +26,7 @@ class ArchitectureCompatibilityTest {
         assertFalse(StateHolderType.DECOMPOSE_COMPONENT in stateHolders)
         assertFalse(NavigationType.CIRCUIT_NAVIGATION in navigation)
         assertFalse(NavigationType.DECOMPOSE_NAVIGATION in navigation)
+        assertTrue(NavigationType.NONE in navigation)
         assertTrue(NavigationType.NAVIGATION_COMPOSE in navigation)
         assertTrue(NavigationType.VOYAGER in navigation)
     }

@@ -313,7 +313,7 @@ class KmpFeatureWizardDialog(
             field.document.addDocumentListener(previewDocumentListener())
         }
         sourceSetRoot.textField.document.addDocumentListener(previewDocumentListener())
-        listOf(di, networking, persistence, projectStyle).forEach { comboBox ->
+        listOf(navigation, di, networking, persistence, projectStyle).forEach { comboBox ->
             comboBox.addActionListener { schedulePreviewRefresh() }
         }
         listOf(autoRegisterDi, autoRegisterNavigation).forEach { checkbox ->
@@ -337,6 +337,7 @@ class KmpFeatureWizardDialog(
     private fun applyDetectedDefaults() {
         architecture.selectedItem = scanResult.suggestedArchitecture
         di.selectedItem = scanResult.suggestedDi
+        projectStyle.selectedItem = scanResult.suggestedProjectStyle
         applyArchitectureCompatibility(
             architectureType = scanResult.suggestedArchitecture,
             preferredStateHolder = null,
@@ -510,6 +511,15 @@ class KmpFeatureWizardDialog(
             stateFile.isSelected = true
             actionFile.isSelected = true
         }
+        if (navigation.selectedItem == NavigationType.NONE) {
+            navigationFile.isSelected = false
+            autoRegisterNavigation.isSelected = false
+        }
+        if (autoRegisterNavigation.isSelected || navigationFile.isSelected) {
+            screenUi.isSelected = true
+            stateFile.isSelected = true
+            actionFile.isSelected = true
+        }
         if (stateHolderFile.isSelected) {
             stateFile.isSelected = true
             actionFile.isSelected = true
@@ -546,6 +556,7 @@ class KmpFeatureWizardDialog(
         appendLine("Default architecture: ${scanResult.suggestedArchitecture.label}")
         appendLine("Default navigation: ${scanResult.suggestedNavigation.label}")
         appendLine("Default DI: ${scanResult.suggestedDi.label}")
+        appendLine("Default project style: ${scanResult.suggestedProjectStyle.label}")
         appendLine("Gradle DSL: ${scanResult.gradleDsl}")
     }
 
@@ -664,7 +675,13 @@ class KmpFeatureWizardDialog(
                         },
                         BorderLayout.NORTH
                     )
-                    add(editor, BorderLayout.CENTER)
+                    add(
+                        JBScrollPane(editor).apply {
+                            verticalScrollBarPolicy = ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED
+                            horizontalScrollBarPolicy = ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED
+                        },
+                        BorderLayout.CENTER
+                    )
                 }
         }.show()
     }

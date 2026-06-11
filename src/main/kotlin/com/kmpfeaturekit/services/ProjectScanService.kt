@@ -9,6 +9,7 @@ import com.kmpfeaturekit.model.ArchitectureType
 import com.kmpfeaturekit.model.ArchitectureCompatibility
 import com.kmpfeaturekit.model.DependencyInjectionType
 import com.kmpfeaturekit.model.NavigationType
+import com.kmpfeaturekit.model.ProjectStyle
 import java.nio.file.Path
 
 data class ProjectScanResult(
@@ -16,6 +17,7 @@ data class ProjectScanResult(
     val suggestedArchitecture: ArchitectureType,
     val suggestedNavigation: NavigationType,
     val suggestedDi: DependencyInjectionType,
+    val suggestedProjectStyle: ProjectStyle,
     val gradleDsl: String
 )
 
@@ -35,6 +37,7 @@ class ProjectScanService(private val project: Project) {
         var hasKotlinGradle = false
         var hasGroovyGradle = false
         var scannedCharacters = 0
+        val sourceDirectories = mutableSetOf<String>()
         val text = buildString {
             project.basePath
                 ?.let { LocalFileSystem.getInstance().findFileByNioFile(Path.of(it)) }
@@ -43,6 +46,7 @@ class ProjectScanService(private val project: Project) {
                     override fun visitFile(file: VirtualFile): Boolean {
                         if (file.isDirectory && file.name in skippedDirectories) return false
                         if (scannedCharacters >= maxScannedCharacters) return false
+                        if (file.isDirectory) sourceDirectories += file.path.replace('\\', '/')
                         if (file.name == "build.gradle.kts") hasKotlinGradle = true
                         if (file.name == "build.gradle") hasGroovyGradle = true
                         if (!file.isDirectory && (file.name.endsWith(".gradle.kts") || file.name.endsWith(".gradle") || file.name.endsWith(".kt"))) {
@@ -72,6 +76,7 @@ class ProjectScanService(private val project: Project) {
             if ("androidx.room" in text) add("Room")
             if ("appyx" in text.lowercase()) add("Appyx")
             if ("navigation-compose" in text || "androidx.navigation.compose" in text) add("Navigation Compose")
+            if ("NavHost(" in text) add("Navigation Compose")
         }
 
         val architecture = when {
@@ -84,8 +89,9 @@ class ProjectScanService(private val project: Project) {
             "Decompose" in libraries -> NavigationType.DECOMPOSE_NAVIGATION
             "Voyager" in libraries -> NavigationType.VOYAGER
             "Appyx" in libraries -> NavigationType.APPYX
-            else -> NavigationType.NAVIGATION_COMPOSE
+            else -> NavigationType.NONE
         }
+        val projectStyle = detectProjectStyle(sourceDirectories)
 
         return ProjectScanResult(
             detectedLibraries = libraries,
@@ -96,11 +102,35 @@ class ProjectScanService(private val project: Project) {
                 "Koin" in libraries -> DependencyInjectionType.KOIN
                 else -> DependencyInjectionType.MANUAL
             },
+            suggestedProjectStyle = projectStyle,
             gradleDsl = when {
                 hasKotlinGradle -> "Kotlin DSL"
                 hasGroovyGradle -> "Groovy DSL"
                 else -> "Kotlin DSL"
             }
         )
+    }
+
+    private fun detectProjectStyle(directories: Set<String>): ProjectStyle {
+        val commonRoots = directories
+            .filter { "/src/commonMain/kotlin/" in it }
+            .map { it.substringBeforeLast("/src/commonMain/kotlin/") to it.substringAfter("/src/commonMain/kotlin/") }
+
+        val layeredRoot = commonRoots
+            .groupBy { (_, packagePath) -> packagePath.substringBefore('/') }
+            .values
+            .firstOrNull { entries ->
+                val packagePaths = entries.map { it.second }.toSet()
+                packagePaths.any { it.endsWith("/data") || it.contains("/data/") } &&
+                    packagePaths.any { it.endsWith("/domain") || it.contains("/domain/") } &&
+                    packagePaths.any { it.endsWith("/presentation") || it.contains("/presentation/") } &&
+                    packagePaths.any { it.endsWith("/ui") || it.contains("/ui/") }
+            }
+        if (layeredRoot != null) return ProjectStyle.LAYERED_GLOBAL
+
+        val hasFeaturePackages = commonRoots.any { (_, packagePath) ->
+            packagePath.contains("/features/") || packagePath.split('/').any { it in setOf("data", "domain", "presentation") }
+        }
+        return if (hasFeaturePackages) ProjectStyle.FEATURE_BASED else ProjectStyle.FEATURE_BASED
     }
 }

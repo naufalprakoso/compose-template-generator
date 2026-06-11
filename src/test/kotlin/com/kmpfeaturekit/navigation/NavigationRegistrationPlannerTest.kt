@@ -10,6 +10,19 @@ import kotlin.test.assertNull
 
 class NavigationRegistrationPlannerTest {
     @Test
+    fun customNavigationDoesNotAttemptRegistration() {
+        val plan = NavigationRegistrationPlanner.plan(
+            moduleRoot = createTempDirectory(),
+            routeName = "PaymentHistory",
+            navigationType = NavigationType.NONE,
+            featurePackageName = "com.example.paymentHistory"
+        )
+
+        assertContains(plan.diffPreview, "Navigation type is Custom / none")
+        assertContains(plan.warnings.joinToString(), "Navigation is custom")
+    }
+
+    @Test
     fun registersRouteInsideNavHost() {
         val content = """
             package com.example

@@ -131,8 +131,15 @@ class GeneratedSampleCompileTest {
         "androidx/compose/runtime/Composable.kt" to """
             package androidx.compose.runtime
 
+            import kotlinx.coroutines.flow.MutableStateFlow
+            import kotlinx.coroutines.flow.StateFlow
+
             @Target(AnnotationTarget.FUNCTION, AnnotationTarget.TYPE)
             annotation class Composable
+
+            class State<T>(val value: T)
+            operator fun <T> State<T>.getValue(thisRef: Any?, property: Any?): T = value
+            fun <T> StateFlow<T>.collectAsState(): State<T> = State((this as MutableStateFlow<T>).value)
         """.trimIndent(),
         "org/jetbrains/compose/ui/tooling/preview/Preview.kt" to """
             package org.jetbrains.compose.ui.tooling.preview
@@ -190,6 +197,7 @@ class GeneratedSampleCompileTest {
             package androidx.compose.material3
 
             import androidx.compose.runtime.Composable
+            import androidx.compose.ui.Modifier
 
             object MaterialTheme {
                 val typography: Typography = Typography()
@@ -212,7 +220,7 @@ class GeneratedSampleCompileTest {
             fun CircularProgressIndicator() {}
 
             @Composable
-            fun Text(text: String, style: Any? = null, color: Any? = null) {}
+            fun Text(text: String, modifier: Modifier = Modifier, style: Any? = null, color: Any? = null) {}
         """.trimIndent(),
         "kotlinx/coroutines/Coroutines.kt" to """
             package kotlinx.coroutines
@@ -234,15 +242,22 @@ class GeneratedSampleCompileTest {
 
             fun SupervisorJob(): CoroutineContext = EmptyCoroutineContext
             fun CoroutineScope.launch(block: suspend () -> Unit) {}
+            fun CoroutineScope.cancel() {}
         """.trimIndent(),
         "kotlinx/coroutines/flow/Flow.kt" to """
             package kotlinx.coroutines.flow
+
+            import androidx.compose.runtime.State
 
             interface StateFlow<T>
 
             class MutableStateFlow<T>(var value: T) : StateFlow<T>
 
             fun <T> MutableStateFlow<T>.asStateFlow(): StateFlow<T> = this
+            fun <T> MutableStateFlow<T>.update(block: (T) -> T) {
+                value = block(value)
+            }
+            fun <T> StateFlow<T>.collectAsState(): State<T> = State((this as MutableStateFlow<T>).value)
         """.trimIndent()
     )
 

@@ -16,6 +16,7 @@ class NavigationRegistrationService(@Suppress("UNUSED_PARAMETER") private val pr
     fun planRouteRegistration(routeName: String, navigationType: NavigationType, candidateFiles: List<String>): RegistrationPlan {
         val target = candidateFiles.firstOrNull { it.contains("nav", ignoreCase = true) || it.contains("route", ignoreCase = true) }
         val patch = when (navigationType) {
+            NavigationType.NONE -> "+ Manual navigation hook for $routeName"
             NavigationType.NAVIGATION_COMPOSE -> "+ composable(${routeName}Route.path) { ${routeName}Screen(...) }"
             NavigationType.CIRCUIT_NAVIGATION -> "+ Circuit screen binding for ${routeName}Screen"
             NavigationType.DECOMPOSE_NAVIGATION -> "+ Decompose child config for $routeName"
@@ -34,6 +35,15 @@ object NavigationRegistrationPlanner {
         featurePackageName: String
     ): RegistrationPlan =
         when (navigationType) {
+            NavigationType.NONE -> RegistrationPlan(
+                safeToApply = false,
+                targetFile = null,
+                diffPreview = """
+                    // Navigation type is Custom / none.
+                    // Wire $routeName into your app-specific navigation flow if this feature needs an entry point.
+                """.trimIndent(),
+                warnings = listOf("Navigation is custom; no generated route registration was attempted.")
+            )
             NavigationType.NAVIGATION_COMPOSE -> planNavigationCompose(moduleRoot, routeName, featurePackageName)
             NavigationType.VOYAGER -> planListRegistration(
                 moduleRoot = moduleRoot,

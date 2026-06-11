@@ -23,6 +23,7 @@ enum class StateHolderType(val label: String) {
 }
 
 enum class NavigationType(val label: String) {
+    NONE("Custom / none"),
     NAVIGATION_COMPOSE("Navigation Compose"),
     VOYAGER("Voyager"),
     CIRCUIT_NAVIGATION("Circuit Navigation"),
@@ -69,6 +70,7 @@ enum class PlatformTarget(val sourceSetName: String, val label: String) {
 enum class ProjectStyle(val label: String) {
     FEATURE_BASED("Feature-based"),
     LAYER_BASED("Layer-based"),
+    LAYERED_GLOBAL("Layered global"),
     HYBRID("Hybrid");
 
     override fun toString(): String = label
@@ -136,12 +138,12 @@ object ArchitectureCompatibility {
 
     fun navigationFor(architectureType: ArchitectureType): List<NavigationType> =
         when (architectureType) {
-            ArchitectureType.MVVM -> listOf(NavigationType.NAVIGATION_COMPOSE, NavigationType.VOYAGER)
-            ArchitectureType.MVI -> listOf(NavigationType.NAVIGATION_COMPOSE, NavigationType.VOYAGER)
+            ArchitectureType.MVVM -> listOf(NavigationType.NONE, NavigationType.NAVIGATION_COMPOSE, NavigationType.VOYAGER)
+            ArchitectureType.MVI -> listOf(NavigationType.NONE, NavigationType.NAVIGATION_COMPOSE, NavigationType.VOYAGER)
             ArchitectureType.SLACK_CIRCUIT -> listOf(NavigationType.CIRCUIT_NAVIGATION)
             ArchitectureType.DECOMPOSE -> listOf(NavigationType.DECOMPOSE_NAVIGATION)
-            ArchitectureType.SIMPLE_FEATURE -> listOf(NavigationType.NAVIGATION_COMPOSE, NavigationType.VOYAGER)
-            ArchitectureType.CLEAN_ARCHITECTURE -> listOf(NavigationType.NAVIGATION_COMPOSE, NavigationType.VOYAGER)
+            ArchitectureType.SIMPLE_FEATURE -> listOf(NavigationType.NONE, NavigationType.NAVIGATION_COMPOSE, NavigationType.VOYAGER)
+            ArchitectureType.CLEAN_ARCHITECTURE -> listOf(NavigationType.NONE, NavigationType.NAVIGATION_COMPOSE, NavigationType.VOYAGER)
         }
 
     fun defaultStateHolderFor(architectureType: ArchitectureType): StateHolderType =

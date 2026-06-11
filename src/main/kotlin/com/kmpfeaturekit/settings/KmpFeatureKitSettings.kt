@@ -13,7 +13,7 @@ import com.kmpfeaturekit.model.NavigationType
 class KmpFeatureKitSettings : PersistentStateComponent<KmpFeatureKitSettings.State> {
     data class State(
         var defaultArchitecture: String = ArchitectureType.MVVM.name,
-        var defaultNavigation: String = NavigationType.NAVIGATION_COMPOSE.name,
+        var defaultNavigation: String = NavigationType.NONE.name,
         var defaultDi: String = DependencyInjectionType.KOIN.name,
         var defaultPackagePattern: String = "features.{featureName}",
         var routeStyle: String = "typed-object",

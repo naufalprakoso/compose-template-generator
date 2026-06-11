@@ -103,6 +103,54 @@ class GradleBuildPatchPlannerTest {
     }
 
     @Test
+    fun insertsLiteralDependenciesWhenNoVersionCatalogIsUsed() {
+        val content = """
+            kotlin {
+                sourceSets {
+                    commonMain.dependencies {
+                        implementation(kotlin("stdlib"))
+                    }
+                }
+            }
+        """.trimIndent()
+
+        val updated = GradleBuildPatchPlanner.insertDependencies(
+            content,
+            listOf(
+                GradleBuildPatchPlanner.DependencyAlias(
+                    alias = "koin-core",
+                    module = "io.insert-koin:koin-core",
+                    version = "4.1.0"
+                )
+            ),
+            useVersionCatalog = false
+        )
+
+        assertContains(updated.orEmpty(), "implementation(\"io.insert-koin:koin-core:4.1.0\")")
+    }
+
+    @Test
+    fun createsMissingCommonTestDependenciesBlockInsideSourceSets() {
+        val content = """
+            kotlin {
+                sourceSets {
+                    commonMain.dependencies {
+                        implementation(kotlin("stdlib"))
+                    }
+                }
+            }
+        """.trimIndent()
+
+        val updated = GradleBuildPatchPlanner.insertDependencies(
+            content,
+            listOf(GradleBuildPatchPlanner.DependencyAlias.raw("kotlin-test", "implementation(kotlin(\"test\"))", "commonTest"))
+        )
+
+        assertContains(updated.orEmpty(), "commonTest.dependencies {")
+        assertContains(updated.orEmpty(), "implementation(kotlin(\"test\"))")
+    }
+
+    @Test
     fun insertsMissingAliasesIntoVersionCatalogLibrariesSection() {
         val catalog = """
             [versions]

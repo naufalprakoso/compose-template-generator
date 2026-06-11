@@ -33,8 +33,15 @@ object GradleBuildPatchPlanner {
         val catalog = findVersionCatalog(buildFile.parent)
         val aliases = catalog?.let { parseAliases(it.readText()) }.orEmpty()
         val dependencies = dependencyAliases(request)
+        if (dependencies.isEmpty()) {
+            return GradleBuildPatch(
+                content = "",
+                replacesFile = false,
+                warnings = listOf("No generated Gradle dependencies were required.")
+            )
+        }
         val catalogPatch = catalog?.let { catalogPath ->
-            val missingAliases = dependencies.filterNot { it.alias in aliases }
+            val missingAliases = dependencies.filter { it.rawLine == null }.filterNot { it.alias in aliases }
             if (missingAliases.isEmpty()) {
                 null
             } else {
@@ -45,9 +52,10 @@ object GradleBuildPatchPlanner {
                 )
             }
         }
-        val availableAliases = aliases + (catalogPatch?.let { dependencies.map { it.alias } }.orEmpty())
+        val availableAliases = aliases + (catalogPatch?.let { dependencies.filter { it.rawLine == null }.map { it.alias } }.orEmpty())
+        val useVersionCatalog = catalog != null
         val dependencyLines = dependencies
-            .filter { it.alias in availableAliases }
+            .filter { it.rawLine != null || !useVersionCatalog || it.alias in availableAliases }
             .distinct()
 
         if (dependencyLines.isEmpty()) {
@@ -59,7 +67,7 @@ object GradleBuildPatchPlanner {
         }
 
         val existing = buildFile.readText()
-        val updated = insertDependencies(existing, dependencyLines)
+        val updated = insertDependencies(existing, dependencyLines, useVersionCatalog = useVersionCatalog)
             ?: return GradleBuildPatch(
                 content = fallbackPatch,
                 replacesFile = false,
@@ -74,7 +82,11 @@ object GradleBuildPatchPlanner {
         return insertSourceSetDependencies(content, "commonMain", dependencyLines)
     }
 
-    fun insertDependencies(content: String, dependencies: List<DependencyAlias>): String? {
+    fun insertDependencies(
+        content: String,
+        dependencies: List<DependencyAlias>,
+        useVersionCatalog: Boolean = true
+    ): String? {
         var updated: String? = content
         dependencies
             .groupBy { it.sourceSet }
@@ -82,13 +94,13 @@ object GradleBuildPatchPlanner {
                 updated = if (sourceSet == null) {
                     insertTopLevelDependencies(
                         updated ?: return null,
-                        aliases.map { it.gradleLine() }
+                        aliases.map { it.gradleLine(useVersionCatalog) }
                     )
                 } else {
                     insertSourceSetDependencies(
                         updated ?: return null,
                         sourceSet,
-                        aliases.map { it.gradleLine() }
+                        aliases.map { it.gradleLine(useVersionCatalog) }
                     )
                 } ?: updated
             }
@@ -109,7 +121,19 @@ object GradleBuildPatchPlanner {
         }
 
         val sourceSetBlockIndex = lines.indexOfFirst { it.trim().startsWith(sourceSetName) && "{" in it }
-        if (sourceSetBlockIndex < 0) return null
+        if (sourceSetBlockIndex < 0) {
+            val sourceSetsIndex = lines.indexOfFirst { it.trim().startsWith("sourceSets") && "{" in it }
+            if (sourceSetsIndex < 0) return null
+            val sourceSetsClose = findBlockClose(lines, sourceSetsIndex) ?: return null
+            val indent = lines[sourceSetsIndex].takeWhile { it.isWhitespace() } + "    "
+            val missing = dependencyLines.filterNot { line -> line in content }
+            if (missing.isEmpty()) return null
+            lines.addAll(
+                sourceSetsClose,
+                listOf("${indent}$sourceSetName.dependencies {") + missing.map { "$indent    $it" } + listOf("$indent}")
+            )
+            return lines.joinToString("\n")
+        }
         val sourceSetClose = findBlockClose(lines, sourceSetBlockIndex) ?: return null
         val indent = lines[sourceSetBlockIndex].takeWhile { it.isWhitespace() } + "    "
         val missing = dependencyLines.filterNot { line -> line in content }
@@ -143,6 +167,9 @@ object GradleBuildPatchPlanner {
     }
 
     private fun dependencyAliases(request: FeatureRequest): List<DependencyAlias> = buildList {
+        if (request.options.unitTests) {
+            add(DependencyAlias.raw("kotlin-test", "implementation(kotlin(\"test\"))", sourceSet = "commonTest"))
+        }
         when (request.architecture.dependencyInjectionType) {
             DependencyInjectionType.KOIN -> add(DependencyAlias("koin-core", "io.insert-koin:koin-core", "4.1.0"))
             DependencyInjectionType.KOTLIN_INJECT -> {
@@ -172,6 +199,7 @@ object GradleBuildPatchPlanner {
             DependencyInjectionType.MANUAL -> Unit
         }
         when (request.architecture.navigationType) {
+            NavigationType.NONE -> Unit
             NavigationType.NAVIGATION_COMPOSE -> add(DependencyAlias("androidx-navigation-compose", "androidx.navigation:navigation-compose", "2.9.0"))
             NavigationType.VOYAGER -> add(DependencyAlias("voyager-navigator", "cafe.adriel.voyager:voyager-navigator", "1.1.0-beta03"))
             NavigationType.CIRCUIT_NAVIGATION -> add(DependencyAlias("circuit-foundation", "com.slack.circuit:circuit-foundation", "0.27.0"))
@@ -250,8 +278,19 @@ object GradleBuildPatchPlanner {
         val module: String,
         val version: String,
         val configuration: String = "implementation(%s)",
-        val sourceSet: String? = "commonMain"
+        val sourceSet: String? = "commonMain",
+        val rawLine: String? = null
     ) {
-        fun gradleLine(): String = configuration.format("libs.${alias.replace("-", ".")}")
+        fun gradleLine(useVersionCatalog: Boolean): String =
+            rawLine ?: if (useVersionCatalog) {
+                configuration.format("libs.${alias.replace("-", ".")}")
+            } else {
+                configuration.format("\"$module:$version\"")
+            }
+
+        companion object {
+            fun raw(alias: String, line: String, sourceSet: String? = "commonMain"): DependencyAlias =
+                DependencyAlias(alias = alias, module = "", version = "", sourceSet = sourceSet, rawLine = line)
+        }
     }
 }
