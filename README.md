@@ -45,7 +45,7 @@ See [docs/support-matrix.md](docs/support-matrix.md) for the exact supported pro
 Prerequisites:
 
 - JDK 17
-- Android Studio installed locally. The default path is `/Applications/Android Studio.app`; override it with `-PandroidStudioPath="/path/to/Android Studio.app"` or `ANDROID_STUDIO_PATH`.
+- Optional local Android Studio installation for `runIde`. CI and default builds download the IntelliJ Platform version from `intellijPlatformVersion` in `gradle.properties`; use `-PandroidStudioPath="/path/to/Android Studio.app"` or `ANDROID_STUDIO_PATH` only when you explicitly want to run against a local IDE.
 
 Run the plugin in a sandbox IDE:
 

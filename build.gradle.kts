@@ -8,8 +8,10 @@ version = providers.gradleProperty("pluginVersion").get()
 
 val androidStudioPath = providers.gradleProperty("androidStudioPath")
     .orElse(providers.environmentVariable("ANDROID_STUDIO_PATH"))
-    .orElse("/Applications/Android Studio.app")
-    .get()
+    .orNull
+    ?.takeIf { file(it).isDirectory }
+val intellijPlatformVersion = providers.gradleProperty("intellijPlatformVersion")
+    .orElse("2025.3")
 
 kotlin {
     jvmToolchain(17)
@@ -24,7 +26,11 @@ repositories {
 
 dependencies {
     intellijPlatform {
-        local(androidStudioPath)
+        if (androidStudioPath != null) {
+            local(androidStudioPath)
+        } else {
+            intellijIdea(intellijPlatformVersion)
+        }
         bundledPlugin("com.intellij.java")
         bundledPlugin("org.jetbrains.kotlin")
         pluginVerifier()
@@ -66,7 +72,11 @@ intellijPlatform {
 
     pluginVerification {
         ides {
-            local(androidStudioPath)
+            if (androidStudioPath != null) {
+                local(androidStudioPath)
+            } else {
+                recommended()
+            }
         }
     }
 }

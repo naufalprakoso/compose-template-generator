@@ -154,7 +154,8 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
         )
         val normalizedRequest = request.copy(options = options)
         val layout = LayeredGlobalLayout.from(request, sourceSetRoot)
-        val vars = layeredVariables(request, layout)
+        val profile = LayeredGlobalProfile.forFeature(names.camelCase)
+        val vars = layeredVariables(request, layout, profile)
         val files = mutableListOf<PlannedFile>()
 
         fun add(path: Path, template: String) {
@@ -162,31 +163,31 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
         }
 
         if (options.repository || options.service || options.state) {
-            add(layout.common("domain/model", "${names.pascalCase}Item.kt"), FeatureTemplates.layeredDomainModel)
+            add(layout.common(profile.domainModelLayer, "${names.pascalCase}Item.kt"), FeatureTemplates.layeredDomainModel)
         }
         if (options.repository) {
-            add(layout.common("domain/repository", "${names.pascalCase}Repository.kt"), FeatureTemplates.layeredRepository)
+            add(layout.common(profile.domainRepositoryLayer, "${names.pascalCase}Repository.kt"), FeatureTemplates.layeredRepository)
         }
         if (options.useCase) {
-            add(layout.common("domain/usecase", "Load${names.pascalCase}UseCase.kt"), FeatureTemplates.layeredUseCase)
+            add(layout.common(profile.domainUseCaseLayer, "Load${names.pascalCase}UseCase.kt"), FeatureTemplates.layeredUseCase)
         }
         if (options.service) {
-            add(layout.common("data/remote", "${names.pascalCase}Service.kt"), FeatureTemplates.layeredService)
+            add(layout.common(profile.dataRemoteLayer, "${names.pascalCase}Service.kt"), FeatureTemplates.layeredService)
         }
         if (options.repositoryImplementation) {
-            add(layout.common("data/repository", "${names.pascalCase}RepositoryImpl.kt"), FeatureTemplates.layeredRepositoryImpl)
+            add(layout.common(profile.dataRepositoryLayer, "${names.pascalCase}RepositoryImpl.kt"), FeatureTemplates.layeredRepositoryImpl)
         }
         if (options.state) {
-            add(layout.common("presentation/${names.camelCase}", "${names.pascalCase}State.kt"), FeatureTemplates.layeredState)
+            add(layout.common(profile.presentationLayer, "${names.pascalCase}State.kt"), FeatureTemplates.layeredState)
         }
         if (options.stateHolder) {
-            add(layout.common("presentation/${names.camelCase}", "${names.pascalCase}ViewModel.kt"), FeatureTemplates.layeredViewModel)
+            add(layout.common(profile.presentationLayer, "${names.pascalCase}ViewModel.kt"), FeatureTemplates.layeredViewModel)
         }
         if (options.screenUi) {
-            add(layout.common("ui", "${names.pascalCase}Screen.kt"), FeatureTemplates.layeredScreen)
+            add(layout.common(profile.uiLayer, "${names.pascalCase}Screen.kt"), FeatureTemplates.layeredScreen)
         }
         if (options.preview && options.screenUi && options.state) {
-            add(layout.common("ui", "${names.pascalCase}Preview.kt"), FeatureTemplates.layeredPreview)
+            add(layout.common(profile.uiLayer, "${names.pascalCase}Preview.kt"), FeatureTemplates.layeredPreview)
         }
         if (options.fakeRepository) {
             add(layout.test("testing", "Fake${names.pascalCase}Repository.kt"), FeatureTemplates.layeredFakeRepository)
@@ -196,13 +197,13 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
         }
         if (options.readme) {
             files += PlannedFile(
-                layout.common("docs/${names.camelCase}", "README.md").toString(),
+                layout.common(profile.docsLayer, "README.md").toString(),
                 "# ${names.pascalCase}\n\n${request.info.description.ifBlank { "Generated layered MVVM feature." }}\n"
             )
         }
 
         if (options.autoRegisterDi) {
-            files += layeredManualDiRegistrationFile(normalizedRequest, moduleRoot, layout)
+            files += layeredManualDiRegistrationFile(normalizedRequest, moduleRoot, layout, profile)
         }
         files += gradleFiles(moduleRoot, normalizedRequest, vars)
 
@@ -332,7 +333,11 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
         )
     }
 
-    private fun layeredVariables(request: FeatureRequest, layout: LayeredGlobalLayout): Map<String, String> {
+    private fun layeredVariables(
+        request: FeatureRequest,
+        layout: LayeredGlobalLayout,
+        profile: LayeredGlobalProfile
+    ): Map<String, String> {
         val names = request.info.names
         return mapOf(
             "FeatureNamePascal" to names.pascalCase,
@@ -343,13 +348,13 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
             "moduleName" to request.info.targetModule,
             "architectureType" to request.architecture.architectureType.label,
             "navigationType" to request.architecture.navigationType.label,
-            "domainModelPackage" to layout.packageFor("domain/model"),
-            "domainRepositoryPackage" to layout.packageFor("domain/repository"),
-            "domainUseCasePackage" to layout.packageFor("domain/usecase"),
-            "dataRemotePackage" to layout.packageFor("data/remote"),
-            "dataRepositoryPackage" to layout.packageFor("data/repository"),
-            "presentationPackage" to layout.packageFor("presentation/${names.camelCase}"),
-            "uiPackage" to layout.packageFor("ui"),
+            "domainModelPackage" to layout.packageFor(profile.domainModelLayer),
+            "domainRepositoryPackage" to layout.packageFor(profile.domainRepositoryLayer),
+            "domainUseCasePackage" to layout.packageFor(profile.domainUseCaseLayer),
+            "dataRemotePackage" to layout.packageFor(profile.dataRemoteLayer),
+            "dataRepositoryPackage" to layout.packageFor(profile.dataRepositoryLayer),
+            "presentationPackage" to layout.packageFor(profile.presentationLayer),
+            "uiPackage" to layout.packageFor(profile.uiLayer),
             "testingPackage" to layout.testPackageFor("testing"),
             "date" to LocalDate.now().toString(),
             "author" to System.getProperty("user.name", "")
@@ -478,17 +483,18 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
     private fun layeredManualDiRegistrationFile(
         request: FeatureRequest,
         moduleRoot: String,
-        layout: LayeredGlobalLayout
+        layout: LayeredGlobalLayout,
+        profile: LayeredGlobalProfile
     ): PlannedFile {
         val names = request.info.names
         val plan = planLayeredAppGraphRegistration(
             moduleRoot = Path.of(moduleRoot),
             featureName = names.pascalCase,
-            serviceImport = "${layout.packageFor("data/remote")}.${names.pascalCase}Service",
-            repositoryInterfaceImport = "${layout.packageFor("domain/repository")}.${names.pascalCase}Repository",
-            repositoryImplImport = "${layout.packageFor("data/repository")}.${names.pascalCase}RepositoryImpl",
-            useCaseImport = "${layout.packageFor("domain/usecase")}.Load${names.pascalCase}UseCase",
-            viewModelImport = "${layout.packageFor("presentation/${names.camelCase}")}.${names.pascalCase}ViewModel",
+            serviceImport = "${layout.packageFor(profile.dataRemoteLayer)}.${names.pascalCase}Service",
+            repositoryInterfaceImport = "${layout.packageFor(profile.domainRepositoryLayer)}.${names.pascalCase}Repository",
+            repositoryImplImport = "${layout.packageFor(profile.dataRepositoryLayer)}.${names.pascalCase}RepositoryImpl",
+            useCaseImport = "${layout.packageFor(profile.domainUseCaseLayer)}.Load${names.pascalCase}UseCase",
+            viewModelImport = "${layout.packageFor(profile.presentationLayer)}.${names.pascalCase}ViewModel",
             includeViewModelFactory = request.options.stateHolder
         )
         return plan?.let { (target, content) ->
@@ -525,7 +531,7 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
             Files.walk(moduleRoot).use { stream ->
                 stream
                     .filter { it.isRegularFile() && it.fileName.toString().endsWith(".kt") }
-                    .filter { path -> "object AppGraph" in path.readTextSafely() }
+                    .filter { path -> path.readTextSafely().looksLikeCompositionRoot() }
                     .toList()
             }
         }.getOrDefault(emptyList())
@@ -557,7 +563,7 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
     ): String? {
         val camel = featureName.replaceFirstChar { it.lowercaseChar() }
         if ("${camel}Repository" in content || "${camel}ViewModel" in content) return null
-        val objectMatch = Regex("""object\s+AppGraph\s*\{""").find(content) ?: return null
+        val objectMatch = compositionRootObjectRegex.find(content) ?: return null
         val openBrace = objectMatch.range.last
         val closeBrace = findMatchingBrace(content, openBrace) ?: return null
         val lineStart = content.lastIndexOf('\n', closeBrace).let { if (it < 0) 0 else it + 1 }
@@ -590,10 +596,7 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
             Files.walk(moduleRoot).use { stream ->
                 stream
                     .filter { it.isRegularFile() && it.fileName.toString().endsWith(".kt") }
-                    .filter { path ->
-                        val text = path.readTextSafely()
-                        "object AppGraph" in text || "object ${moduleRoot.fileName}Graph" in text
-                    }
+                    .filter { path -> path.readTextSafely().looksLikeCompositionRoot() }
                     .toList()
             }
         }.getOrDefault(emptyList())
@@ -621,7 +624,7 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
     ): String? {
         val camel = featureName.replaceFirstChar { it.lowercaseChar() }
         if ("${camel}Dependencies" in content) return null
-        val objectMatch = Regex("""object\s+\w*Graph\s*\{""").find(content) ?: return null
+        val objectMatch = compositionRootObjectRegex.find(content) ?: return null
         val openBrace = objectMatch.range.last
         val closeBrace = findMatchingBrace(content, openBrace) ?: return null
         val lineStart = content.lastIndexOf('\n', closeBrace).let { if (it < 0) 0 else it + 1 }
@@ -657,6 +660,17 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
     private fun Path.readTextSafely(): String =
         runCatching { takeIf { Files.size(it) < 200_000 }?.readText() }.getOrNull().orEmpty()
 
+    private fun String.looksLikeCompositionRoot(): Boolean {
+        if (!compositionRootObjectRegex.containsMatchIn(this)) return false
+        if ("object AppGraph" in this) return true
+        val lower = lowercase()
+        return listOf("repository", "usecase", "viewmodel", "service", "dependencies", "factory")
+            .count { it in lower } >= 2
+    }
+
+    private val compositionRootObjectRegex =
+        Regex("""object\s+\w*(Graph|Component|Provider|Container|Dependencies)\s*\{""")
+
     private data class StateHolderPlan(val suffix: String, val template: String)
 
     private data class LayeredGlobalLayout(
@@ -687,6 +701,31 @@ class FeaturePlanBuilder(private val renderer: (String, Map<String, String>) -> 
                     basePackage = request.info.basePackage
                 )
             }
+        }
+    }
+
+    private data class LayeredGlobalProfile(
+        val domainModelLayer: String,
+        val domainRepositoryLayer: String,
+        val domainUseCaseLayer: String,
+        val dataRemoteLayer: String,
+        val dataRepositoryLayer: String,
+        val presentationLayer: String,
+        val uiLayer: String,
+        val docsLayer: String
+    ) {
+        companion object {
+            fun forFeature(featureNameCamel: String): LayeredGlobalProfile =
+                LayeredGlobalProfile(
+                    domainModelLayer = "domain/model",
+                    domainRepositoryLayer = "domain/repository",
+                    domainUseCaseLayer = "domain/usecase",
+                    dataRemoteLayer = "data/remote",
+                    dataRepositoryLayer = "data/repository",
+                    presentationLayer = "presentation/$featureNameCamel",
+                    uiLayer = "ui",
+                    docsLayer = "docs/$featureNameCamel"
+                )
         }
     }
 

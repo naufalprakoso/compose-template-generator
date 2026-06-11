@@ -7,6 +7,7 @@ import com.intellij.openapi.components.Storage
 import com.kmpfeaturekit.model.ArchitectureType
 import com.kmpfeaturekit.model.DependencyInjectionType
 import com.kmpfeaturekit.model.NavigationType
+import com.kmpfeaturekit.model.ProjectStyle
 
 @State(name = "KmpFeatureKitSettings", storages = [Storage("kmpFeatureKit.xml")])
 @Service(Service.Level.PROJECT)
@@ -15,9 +16,12 @@ class KmpFeatureKitSettings : PersistentStateComponent<KmpFeatureKitSettings.Sta
         var defaultArchitecture: String = ArchitectureType.MVVM.name,
         var defaultNavigation: String = NavigationType.NONE.name,
         var defaultDi: String = DependencyInjectionType.KOIN.name,
+        var defaultProjectStyle: String = ProjectStyle.FEATURE_BASED.name,
         var defaultPackagePattern: String = "features.{featureName}",
         var routeStyle: String = "typed-object",
         var generatePreviews: Boolean = true,
+        var autoRegisterDi: Boolean = true,
+        var autoRegisterNavigation: Boolean = true,
         var inspectionSeverity: String = "WARNING"
     )
 

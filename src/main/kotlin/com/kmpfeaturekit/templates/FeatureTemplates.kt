@@ -796,7 +796,19 @@ object FeatureTemplates {
             modifier: Modifier = Modifier
         ) {
             val state by stateFlow.collectAsState()
+            {{FeatureNamePascal}}Screen(
+                state = state,
+                onRefresh = onRefresh,
+                modifier = modifier
+            )
+        }
 
+        @Composable
+        fun {{FeatureNamePascal}}Screen(
+            state: {{FeatureNamePascal}}State,
+            onRefresh: () -> Unit,
+            modifier: Modifier = Modifier
+        ) {
             Column(
                 modifier = modifier.fillMaxSize().padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -830,7 +842,6 @@ object FeatureTemplates {
 
         import {{domainModelPackage}}.{{FeatureNamePascal}}Item
         import {{presentationPackage}}.{{FeatureNamePascal}}State
-        import kotlinx.coroutines.flow.MutableStateFlow
         import org.jetbrains.compose.ui.tooling.preview.Preview
         import androidx.compose.runtime.Composable
 
@@ -838,11 +849,9 @@ object FeatureTemplates {
         @Composable
         private fun {{FeatureNamePascal}}ScreenPreview() {
             {{FeatureNamePascal}}Screen(
-                stateFlow = MutableStateFlow(
-                    {{FeatureNamePascal}}State(
-                        items = listOf({{FeatureNamePascal}}Item(id = "preview", title = "Preview {{FeatureNamePascal}}")),
-                        isLoading = false
-                    )
+                state = {{FeatureNamePascal}}State(
+                    items = listOf({{FeatureNamePascal}}Item(id = "preview", title = "Preview {{FeatureNamePascal}}")),
+                    isLoading = false
                 ),
                 onRefresh = {}
             )

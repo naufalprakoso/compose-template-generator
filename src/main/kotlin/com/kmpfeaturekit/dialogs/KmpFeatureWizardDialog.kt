@@ -36,6 +36,8 @@ import com.kmpfeaturekit.model.ProjectStyle
 import com.kmpfeaturekit.model.StateHolderType
 import com.kmpfeaturekit.services.ProjectScanResult
 import com.kmpfeaturekit.services.ProjectScanService
+import com.kmpfeaturekit.services.ScanConfidence
+import com.kmpfeaturekit.settings.KmpFeatureKitSettings
 import com.kmpfeaturekit.utils.ValidationUtils
 import java.awt.BorderLayout
 import java.awt.Cursor
@@ -110,12 +112,14 @@ class KmpFeatureWizardDialog(
     private val detectedSummary = JBTextArea(5, 48)
     private val warningList = JPanel()
     private val scanResult: ProjectScanResult = project.service<ProjectScanService>().scan()
+    private val settings = project.service<KmpFeatureKitSettings>().state
     private val previewRefreshTimer = Timer(350) { refreshPreviewNow() }.apply {
         isRepeats = false
     }
 
     init {
         title = "Compose Template Generator"
+        applySettingsDefaults()
         applyDetectedDefaults()
         networking.selectedItem = NetworkingType.NONE
         persistence.selectedItem = PersistenceType.NONE
@@ -335,14 +339,41 @@ class KmpFeatureWizardDialog(
         }
 
     private fun applyDetectedDefaults() {
-        architecture.selectedItem = scanResult.suggestedArchitecture
-        di.selectedItem = scanResult.suggestedDi
-        projectStyle.selectedItem = scanResult.suggestedProjectStyle
+        val useScanDefaults = scanResult.confidence != ScanConfidence.LOW
+        architecture.selectedItem = if (useScanDefaults) {
+            scanResult.suggestedArchitecture
+        } else {
+            settings.defaultArchitecture.toEnumOrDefault(ArchitectureType.MVVM)
+        }
+        di.selectedItem = if (useScanDefaults) {
+            scanResult.suggestedDi
+        } else {
+            settings.defaultDi.toEnumOrDefault(DependencyInjectionType.KOIN)
+        }
+        projectStyle.selectedItem = if (useScanDefaults) {
+            scanResult.suggestedProjectStyle
+        } else {
+            settings.defaultProjectStyle.toEnumOrDefault(ProjectStyle.FEATURE_BASED)
+        }
         applyArchitectureCompatibility(
-            architectureType = scanResult.suggestedArchitecture,
+            architectureType = architecture.selectedItem as ArchitectureType,
             preferredStateHolder = null,
-            preferredNavigation = scanResult.suggestedNavigation
+            preferredNavigation = if (useScanDefaults) {
+                scanResult.suggestedNavigation
+            } else {
+                settings.defaultNavigation.toEnumOrDefault(NavigationType.NONE)
+            }
         )
+    }
+
+    private fun applySettingsDefaults() {
+        architecture.selectedItem = settings.defaultArchitecture.toEnumOrDefault(ArchitectureType.MVVM)
+        navigation.selectedItem = settings.defaultNavigation.toEnumOrDefault(NavigationType.NONE)
+        di.selectedItem = settings.defaultDi.toEnumOrDefault(DependencyInjectionType.KOIN)
+        projectStyle.selectedItem = settings.defaultProjectStyle.toEnumOrDefault(ProjectStyle.FEATURE_BASED)
+        screenPreview.isSelected = settings.generatePreviews
+        autoRegisterDi.isSelected = settings.autoRegisterDi
+        autoRegisterNavigation.isSelected = settings.autoRegisterNavigation
     }
 
     private fun applyArchitectureCompatibility(
@@ -557,7 +588,9 @@ class KmpFeatureWizardDialog(
         appendLine("Default navigation: ${scanResult.suggestedNavigation.label}")
         appendLine("Default DI: ${scanResult.suggestedDi.label}")
         appendLine("Default project style: ${scanResult.suggestedProjectStyle.label}")
+        appendLine("Detection confidence: ${scanResult.confidence.label}")
         appendLine("Gradle DSL: ${scanResult.gradleDsl}")
+        scanResult.evidence.take(5).forEach { appendLine("- $it") }
     }
 
     private fun schedulePreviewRefresh() {
@@ -653,7 +686,7 @@ class KmpFeatureWizardDialog(
         buildString {
             appendLine(previewLabel(plannedFile, selected = true))
             appendLine()
-            appendLine(plannedFile.content)
+            appendLine(plannedFile.diffPreview ?: plannedFile.content)
         }
 
     private fun showSelectedChangePopup(plannedFile: PlannedFile) {
@@ -768,4 +801,7 @@ class KmpFeatureWizardDialog(
             .replace("<", "&lt;")
             .replace(">", "&gt;")
             .replace("\"", "&quot;")
+
+    private inline fun <reified T : Enum<T>> String.toEnumOrDefault(defaultValue: T): T =
+        enumValues<T>().firstOrNull { it.name == this } ?: defaultValue
 }

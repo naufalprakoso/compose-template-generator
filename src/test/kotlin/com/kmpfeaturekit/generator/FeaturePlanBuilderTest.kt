@@ -366,6 +366,31 @@ class FeaturePlanBuilderTest {
     }
 
     @Test
+    fun layeredGlobalRegistrationPatchesComponentStyleCompositionRoot() {
+        val updated = builder.registerLayeredAppGraph(
+            content = """
+                package com.example.di
+
+                object AppComponent {
+                    private val userRepository by lazy { UserRepository() }
+                    fun userViewModel() = UserViewModel(userRepository)
+                }
+            """.trimIndent(),
+            featureName = "PaymentHistory",
+            serviceImport = "com.example.data.remote.PaymentHistoryService",
+            repositoryInterfaceImport = "com.example.domain.repository.PaymentHistoryRepository",
+            repositoryImplImport = "com.example.data.repository.PaymentHistoryRepositoryImpl",
+            useCaseImport = "com.example.domain.usecase.LoadPaymentHistoryUseCase",
+            viewModelImport = "com.example.presentation.paymentHistory.PaymentHistoryViewModel",
+            includeViewModelFactory = true
+        )
+
+        assertTrue("object AppComponent" in updated.orEmpty())
+        assertTrue("private val paymentHistoryRepository: PaymentHistoryRepository by lazy" in updated.orEmpty())
+        assertTrue("fun paymentHistoryViewModel(): PaymentHistoryViewModel" in updated.orEmpty())
+    }
+
+    @Test
     fun fileOptionsControlPreviewReadmeAndTests() {
         val files = builder.build(
             request(ArchitectureType.MVVM).copy(

@@ -45,7 +45,10 @@ class KmpFeatureKitToolWindowFactory : ToolWindowFactory {
             appendLine("- Architecture: ${scan.suggestedArchitecture.label}")
             appendLine("- Navigation: ${scan.suggestedNavigation.label}")
             appendLine("- DI: ${scan.suggestedDi.label}")
+            appendLine("- Project style: ${scan.suggestedProjectStyle.label}")
+            appendLine("- Confidence: ${scan.confidence.label}")
             appendLine("- Gradle DSL: ${scan.gradleDsl}")
+            scan.evidence.take(8).forEach { appendLine("  - $it") }
             appendLine()
             appendLine("Source sets:")
             sourceSets.sourceSets.forEach { appendLine("- ${it.name}: ${if (it.exists) "present" else "missing"}") }

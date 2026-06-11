@@ -18,8 +18,173 @@ data class ProjectScanResult(
     val suggestedNavigation: NavigationType,
     val suggestedDi: DependencyInjectionType,
     val suggestedProjectStyle: ProjectStyle,
-    val gradleDsl: String
+    val gradleDsl: String,
+    val confidence: ScanConfidence = ScanConfidence.MEDIUM,
+    val evidence: List<String> = emptyList()
 )
+
+enum class ScanConfidence(val label: String) {
+    LOW("Low"),
+    MEDIUM("Medium"),
+    HIGH("High")
+}
+
+data class ProjectScanInput(
+    val text: String,
+    val sourceDirectories: Set<String>,
+    val hasKotlinGradle: Boolean,
+    val hasGroovyGradle: Boolean
+)
+
+object ProjectScanAnalyzer {
+    fun analyze(input: ProjectScanInput): ProjectScanResult {
+        val text = input.text
+        val lowerText = text.lowercase()
+        val evidence = mutableListOf<String>()
+        val libraries = buildSet {
+            fun detect(name: String, condition: Boolean, reason: String) {
+                if (condition) {
+                    add(name)
+                    evidence += reason
+                }
+            }
+            detect("Slack Circuit", "slack.circuit" in text || "circuit" in lowerText, "Detected Circuit references in Kotlin/Gradle files.")
+            detect("Voyager", "voyager" in lowerText, "Detected Voyager references in Kotlin/Gradle files.")
+            detect("Decompose", "decompose" in lowerText, "Detected Decompose references in Kotlin/Gradle files.")
+            detect("Koin", "insert-koin" in text || "io.insert-koin" in text, "Detected Koin dependency or package reference.")
+            detect("Kotlin Inject", "kotlin-inject" in text || "me.tatarka.inject" in text, "Detected kotlin-inject dependency or package reference.")
+            detect("Apollo", "apollo" in lowerText, "Detected Apollo references in Kotlin/Gradle files.")
+            detect("Ktor", "ktor" in lowerText, "Detected Ktor references in Kotlin/Gradle files.")
+            detect("SQLDelight", "sqldelight" in lowerText, "Detected SQLDelight references in Kotlin/Gradle files.")
+            detect("Room", "androidx.room" in text, "Detected AndroidX Room references.")
+            detect("Appyx", "appyx" in lowerText, "Detected Appyx references in Kotlin/Gradle files.")
+            detect(
+                "Navigation Compose",
+                "navigation-compose" in text || "androidx.navigation.compose" in text || "NavHost(" in text,
+                "Detected Navigation Compose dependency or NavHost usage."
+            )
+        }
+
+        val architecture = when {
+            "Slack Circuit" in libraries -> ArchitectureType.SLACK_CIRCUIT
+            "Decompose" in libraries -> ArchitectureType.DECOMPOSE
+            else -> ArchitectureType.MVVM
+        }
+        evidence += "Suggested ${architecture.label} architecture from detected framework signals."
+
+        val detectedNavigation = when {
+            "Slack Circuit" in libraries -> NavigationType.CIRCUIT_NAVIGATION
+            "Decompose" in libraries -> NavigationType.DECOMPOSE_NAVIGATION
+            "Voyager" in libraries -> NavigationType.VOYAGER
+            "Appyx" in libraries -> NavigationType.APPYX
+            "Navigation Compose" in libraries -> NavigationType.NAVIGATION_COMPOSE
+            else -> NavigationType.NONE
+        }
+        val projectStyleDetection = detectProjectStyle(input.sourceDirectories)
+        evidence += projectStyleDetection.evidence
+
+        val confidence = when {
+            projectStyleDetection.confidence == ScanConfidence.HIGH && libraries.isNotEmpty() -> ScanConfidence.HIGH
+            projectStyleDetection.confidence == ScanConfidence.LOW && libraries.isEmpty() -> ScanConfidence.LOW
+            else -> ScanConfidence.MEDIUM
+        }
+
+        return ProjectScanResult(
+            detectedLibraries = libraries,
+            suggestedArchitecture = architecture,
+            suggestedNavigation = ArchitectureCompatibility.coerceNavigation(architecture, detectedNavigation),
+            suggestedDi = when {
+                "Kotlin Inject" in libraries -> DependencyInjectionType.KOTLIN_INJECT
+                "Koin" in libraries -> DependencyInjectionType.KOIN
+                else -> DependencyInjectionType.MANUAL
+            },
+            suggestedProjectStyle = projectStyleDetection.style,
+            gradleDsl = when {
+                input.hasKotlinGradle -> "Kotlin DSL"
+                input.hasGroovyGradle -> "Groovy DSL"
+                else -> "Kotlin DSL"
+            },
+            confidence = confidence,
+            evidence = evidence.distinct()
+        )
+    }
+
+    private fun detectProjectStyle(directories: Set<String>): ProjectStyleDetection {
+        val commonRoots = directories
+            .filter { "/src/commonMain/kotlin/" in it }
+            .map { it.substringBeforeLast("/src/commonMain/kotlin/") to it.substringAfter("/src/commonMain/kotlin/") }
+
+        val groupedByPackageRoot = commonRoots.groupBy { (_, packagePath) -> packagePath.substringBefore('/') }
+        val layeredRoot = groupedByPackageRoot.values.firstOrNull { entries ->
+            val packagePaths = entries.map { it.second }.toSet()
+            packagePaths.hasLayer("data") &&
+                packagePaths.hasLayer("domain") &&
+                packagePaths.hasLayer("presentation") &&
+                packagePaths.hasLayer("ui")
+        }
+        if (layeredRoot != null) {
+            val root = layeredRoot.first().second.substringBefore('/')
+            return ProjectStyleDetection(
+                ProjectStyle.LAYERED_GLOBAL,
+                ScanConfidence.HIGH,
+                listOf("Detected layered global structure under `$root` with data/domain/presentation/ui roots.")
+            )
+        }
+
+        val hybrid = commonRoots.firstOrNull { (_, packagePath) ->
+            "/features/" in "/$packagePath/" &&
+                ("/data/" in "/$packagePath/" || "/domain/" in "/$packagePath/" || "/presentation/" in "/$packagePath/")
+        }
+        if (hybrid != null) {
+            return ProjectStyleDetection(
+                ProjectStyle.HYBRID,
+                ScanConfidence.HIGH,
+                listOf("Detected hybrid feature packages under `${hybrid.second.substringBefore("/features/")}.features`.")
+            )
+        }
+
+        val layerBased = groupedByPackageRoot.values.firstOrNull { entries ->
+            val packagePaths = entries.map { it.second }.toSet()
+            packagePaths.hasLayer("data") &&
+                packagePaths.hasLayer("domain") &&
+                packagePaths.hasLayer("presentation")
+        }
+        if (layerBased != null) {
+            val root = layerBased.first().second.substringBefore('/')
+            return ProjectStyleDetection(
+                ProjectStyle.LAYER_BASED,
+                ScanConfidence.MEDIUM,
+                listOf("Detected layer-based package roots under `$root`.")
+            )
+        }
+
+        val featureBased = commonRoots.firstOrNull { (_, packagePath) ->
+            packagePath.split('/').any { it == "feature" || it == "features" }
+        }
+        if (featureBased != null) {
+            return ProjectStyleDetection(
+                ProjectStyle.FEATURE_BASED,
+                ScanConfidence.MEDIUM,
+                listOf("Detected feature package marker in `${featureBased.second}`.")
+            )
+        }
+
+        return ProjectStyleDetection(
+            ProjectStyle.FEATURE_BASED,
+            ScanConfidence.LOW,
+            listOf("No strong project-style signal found; using feature-based defaults.")
+        )
+    }
+
+    private fun Set<String>.hasLayer(layer: String): Boolean =
+        any { it.endsWith("/$layer") || it.contains("/$layer/") }
+
+    private data class ProjectStyleDetection(
+        val style: ProjectStyle,
+        val confidence: ScanConfidence,
+        val evidence: List<String>
+    )
+}
 
 @Service(Service.Level.PROJECT)
 class ProjectScanService(private val project: Project) {
@@ -64,73 +229,13 @@ class ProjectScanService(private val project: Project) {
             }
         }
 
-        val libraries = buildSet {
-            if ("slack.circuit" in text || "circuit" in text.lowercase()) add("Slack Circuit")
-            if ("voyager" in text.lowercase()) add("Voyager")
-            if ("decompose" in text.lowercase()) add("Decompose")
-            if ("insert-koin" in text || "io.insert-koin" in text) add("Koin")
-            if ("kotlin-inject" in text || "me.tatarka.inject" in text) add("Kotlin Inject")
-            if ("apollo" in text.lowercase()) add("Apollo")
-            if ("ktor" in text.lowercase()) add("Ktor")
-            if ("sqldelight" in text.lowercase()) add("SQLDelight")
-            if ("androidx.room" in text) add("Room")
-            if ("appyx" in text.lowercase()) add("Appyx")
-            if ("navigation-compose" in text || "androidx.navigation.compose" in text) add("Navigation Compose")
-            if ("NavHost(" in text) add("Navigation Compose")
-        }
-
-        val architecture = when {
-                "Slack Circuit" in libraries -> ArchitectureType.SLACK_CIRCUIT
-                "Decompose" in libraries -> ArchitectureType.DECOMPOSE
-                else -> ArchitectureType.MVVM
-            }
-        val detectedNavigation = when {
-            "Slack Circuit" in libraries -> NavigationType.CIRCUIT_NAVIGATION
-            "Decompose" in libraries -> NavigationType.DECOMPOSE_NAVIGATION
-            "Voyager" in libraries -> NavigationType.VOYAGER
-            "Appyx" in libraries -> NavigationType.APPYX
-            else -> NavigationType.NONE
-        }
-        val projectStyle = detectProjectStyle(sourceDirectories)
-
-        return ProjectScanResult(
-            detectedLibraries = libraries,
-            suggestedArchitecture = architecture,
-            suggestedNavigation = ArchitectureCompatibility.coerceNavigation(architecture, detectedNavigation),
-            suggestedDi = when {
-                "Kotlin Inject" in libraries -> DependencyInjectionType.KOTLIN_INJECT
-                "Koin" in libraries -> DependencyInjectionType.KOIN
-                else -> DependencyInjectionType.MANUAL
-            },
-            suggestedProjectStyle = projectStyle,
-            gradleDsl = when {
-                hasKotlinGradle -> "Kotlin DSL"
-                hasGroovyGradle -> "Groovy DSL"
-                else -> "Kotlin DSL"
-            }
+        return ProjectScanAnalyzer.analyze(
+            ProjectScanInput(
+                text = text,
+                sourceDirectories = sourceDirectories,
+                hasKotlinGradle = hasKotlinGradle,
+                hasGroovyGradle = hasGroovyGradle
+            )
         )
-    }
-
-    private fun detectProjectStyle(directories: Set<String>): ProjectStyle {
-        val commonRoots = directories
-            .filter { "/src/commonMain/kotlin/" in it }
-            .map { it.substringBeforeLast("/src/commonMain/kotlin/") to it.substringAfter("/src/commonMain/kotlin/") }
-
-        val layeredRoot = commonRoots
-            .groupBy { (_, packagePath) -> packagePath.substringBefore('/') }
-            .values
-            .firstOrNull { entries ->
-                val packagePaths = entries.map { it.second }.toSet()
-                packagePaths.any { it.endsWith("/data") || it.contains("/data/") } &&
-                    packagePaths.any { it.endsWith("/domain") || it.contains("/domain/") } &&
-                    packagePaths.any { it.endsWith("/presentation") || it.contains("/presentation/") } &&
-                    packagePaths.any { it.endsWith("/ui") || it.contains("/ui/") }
-            }
-        if (layeredRoot != null) return ProjectStyle.LAYERED_GLOBAL
-
-        val hasFeaturePackages = commonRoots.any { (_, packagePath) ->
-            packagePath.contains("/features/") || packagePath.split('/').any { it in setOf("data", "domain", "presentation") }
-        }
-        return if (hasFeaturePackages) ProjectStyle.FEATURE_BASED else ProjectStyle.FEATURE_BASED
     }
 }

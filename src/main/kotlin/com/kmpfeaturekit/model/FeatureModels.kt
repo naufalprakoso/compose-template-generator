@@ -169,7 +169,9 @@ data class PlannedFile(
     val content: String,
     val kind: PlannedFileKind = PlannedFileKind.CREATE,
     val conflict: Boolean = false,
-    val replacesFile: Boolean = false
+    val replacesFile: Boolean = false,
+    val existingContent: String? = null,
+    val diffPreview: String? = null
 )
 
 data class DryRunPreview(

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Adds explainable project scanning with confidence and evidence for detected architecture, navigation, DI, and project style.
+- Shows compact unified diffs for modified files in the change preview.
+- Broadens manual composition-root patching beyond `AppGraph` to component/provider/container-style roots with DI signals.
+- Refactors layered-global MVVM generation through a profile so future project-shape variants can be added without scattering path logic.
+- Improves layered-global generated screens with a stateless Compose renderer plus a `StateFlow` wrapper for easier previews and tests.
+- Validates generated Kotlin previews for unresolved placeholders, package/path mismatches, missing generated files, and missing generated imports.
+- Applies project settings to wizard defaults for architecture, navigation, DI, project style, preview generation, and auto-registration.
+- Makes preview, feature-test, and expect/actual quick fixes create concrete stubs instead of no-op placeholders.
+
 ## 0.1.4
 
 - Adds layered-global MVVM project-style detection for projects with `data`, `domain`, `presentation`, and `ui` roots.
