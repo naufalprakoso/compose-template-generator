@@ -3,6 +3,7 @@ package com.kmpfeaturekit.generator
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class UnifiedDiffTest {
     @Test
@@ -32,7 +33,11 @@ class UnifiedDiffTest {
 
         assertContains(diff, "--- /repo/shared/build.gradle.kts")
         assertContains(diff, "+++ /repo/shared/build.gradle.kts")
-        assertContains(diff, "+                            implementation(\"io.ktor:ktor-client-core:3.0.0\")")
-        assertFalse("-                            implementation(\"io.ktor:ktor-client-core:3.0.0\")" in diff)
+        assertTrue(diff.lineSequence().any { line ->
+            line.startsWith("+") && "implementation(\"io.ktor:ktor-client-core:3.0.0\")" in line
+        })
+        assertFalse(diff.lineSequence().any { line ->
+            line.startsWith("-") && "implementation(\"io.ktor:ktor-client-core:3.0.0\")" in line
+        })
     }
 }
