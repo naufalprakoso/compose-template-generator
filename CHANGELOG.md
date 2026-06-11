@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.4
+
+- Adds layered-global MVVM project-style detection for projects with `data`, `domain`, `presentation`, and `ui` roots.
+- Generates layered MVVM features into host-project folders such as `domain/model`, `domain/repository`, `domain/usecase`, `data/remote`, `data/repository`, `presentation/<feature>`, and `ui`.
+- Improves custom-navigation defaults so generated features do not assume Navigation Compose without a concrete project signal.
+- Patches manual `AppGraph` roots with service, repository, use case, and ViewModel factory wiring for layered projects.
+- Keeps vertical slices more consistent by avoiding generated TODOs that reference classes not produced by the selected options.
+- Makes change-preview popups scrollable for longer generated or modified files.
+
 ## 0.1.3
 
 - Fixes generated file writes so the IntelliJ write command runs on the EDT.

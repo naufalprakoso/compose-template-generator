@@ -56,7 +56,7 @@ intellijPlatform {
         """.trimIndent()
 
         changeNotes = """
-            Fixes generated file writes so the IntelliJ write command is executed on the EDT, avoiding read-access assertions on newer Android Studio builds, and keeps the guided wizard improvements from 0.1.2.
+            Adds layered-global MVVM project detection and generation for projects that organize code under data/domain/presentation/ui, improves custom-navigation defaults, patches manual AppGraph roots more naturally, and makes change-preview popups scrollable.
         """.trimIndent()
     }
 
